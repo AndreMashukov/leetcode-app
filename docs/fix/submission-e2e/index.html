@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>leetcode-app — Submission E2E Fix (2026-06-25)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #111111;
+      --border: #27272a;
+      --text: #e4e4e7;
+      --muted: #a1a1aa;
+      --primary: #8b5cf6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      background: var(--card);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { color: var(--muted); margin-top: 0.35rem; font-size: 0.95rem; }
+    .status-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .pill {
+      font-size: 0.75rem; padding: 0.25rem 0.65rem; border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+    .pill-ok { border-color: var(--ok); color: var(--ok); background: rgba(34,197,94,0.08); }
+    .pill-warn { border-color: var(--warn); color: var(--warn); background: rgba(245,158,11,0.08); }
+    nav.tabs {
+      display: flex; gap: 0.25rem; padding: 0.75rem 2rem;
+      background: var(--card); border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    nav.tabs .tab {
+      background: transparent; border: 1px solid transparent;
+      color: var(--muted); padding: 0.5rem 1rem; border-radius: 8px;
+      cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+    }
+    nav.tabs .tab.active {
+      color: var(--primary); border-color: var(--border);
+      background: rgba(139, 92, 246, 0.12);
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 2rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
+    .card h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: var(--primary); }
+    .card p, .card li { color: var(--muted); font-size: 0.92rem; }
+    .card ul, .card ol { padding-left: 1.25rem; margin: 0.5rem 0; }
+    .callout {
+      border-left: 3px solid var(--primary);
+      padding: 0.75rem 1rem; margin: 1rem 0;
+      background: rgba(139, 92, 246, 0.06); border-radius: 0 8px 8px 0;
+      font-size: 0.9rem; color: var(--muted);
+    }
+    .callout.bad { border-color: var(--bad); background: rgba(239,68,68,0.06); }
+    .callout.ok { border-color: var(--ok); background: rgba(34,197,94,0.06); }
+    pre.mermaid {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem; overflow-x: auto; margin: 1rem 0;
+    }
+    .code-block { margin: 1rem 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .code-file {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #1a1a1a; padding: 0.5rem 0.85rem; font-size: 0.78rem;
+      font-family: ui-monospace, monospace; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .badge-bad { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: rgba(239,68,68,0.15); color: var(--bad); }
+    .badge-ok { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: rgba(34,197,94,0.15); color: var(--ok); }
+    .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; font-size: 0.82rem; }
+    table.timeline { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.75rem; }
+    table.timeline th, table.timeline td {
+      text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    table.timeline th { color: var(--muted); font-weight: 500; }
+    a { color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Submission E2E Fix</h1>
+    <p>Why submissions stuck in <code>RUNNING</code> after the workers stack deployed — and what fixed it.</p>
+    <div class="status-row">
+      <span class="pill pill-ok">Resolved 2026-06-25</span>
+      <span class="pill pill-ok">Verified ACCEPTED path</span>
+      <span class="pill pill-warn">Image dev-99eba5e1e1</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-panel="summary">Summary</button>
+    <button class="tab" data-panel="causes">Root causes</button>
+    <button class="tab" data-panel="fix">The fix</button>
+    <button class="tab" data-panel="verify">Verification</button>
+  </nav>
+
+  <main>
+    <section id="summary" class="panel active">
+      <div class="card">
+        <h2>Symptom</h2>
+        <p>Synthetic SQS messages exercised the worker pipeline: submissions transitioned <code>PENDING → RUNNING</code> within seconds but never reached a terminal status (<code>ACCEPTED</code>, <code>WRONG_ANSWER</code>, etc.). CloudWatch on the official workers log group showed startup lines only — no result lines.</p>
+        <p>The runner subprocess worked when invoked manually from a debug ECS task, so the failure was in the dispatcher’s post-run DDB write path (or something intercepting queue messages before the official worker could finish).</p>
+      </div>
+
+      <div class="card">
+        <h2>What actually happened</h2>
+        <pre class="mermaid">
+flowchart TD
+  SQS[work-queue message] --> Rogue[test-workers-cluster task\nold dev-latest image\nno CloudWatch logs]
+  SQS --> Official[leetcode-workers-dev task\ndev-99eba5e1e1 image]
+  Rogue --> Claim[Conditional claim\nPENDING to RUNNING]
+  Claim --> Run[Runner succeeds\npassedCount equals totalCount]
+  Run --> Bug[Double-wrapped resultSummary\nParamValidationError]
+  Bug --> Stuck[Row stays RUNNING\nSQS message deleted or retried]
+  Official --> Skip[Retry sees RUNNING\nnot PENDING — skipping]
+        </pre>
+        <div class="callout bad">
+          The initial debug hypothesis — stderr buffering hiding logs — was wrong. Claim and skip lines appeared in CloudWatch once the correct worker handled retries. The winning worker on first attempt had <strong>no log group</strong>.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Related docs</h2>
+        <ul>
+          <li><a href="../../blocker__submission_e2e_status_2026-06-25.md">blocker__submission_e2e_status_2026-06-25.md</a> — raw incident log</li>
+          <li><a href="../../architecture/index.html">architecture/index.html</a> — platform architecture explainer</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="causes" class="panel">
+      <div class="card">
+        <h2>Blocker 1 — CloudWatch log group mismatch (pre-fix deploy)</h2>
+        <p>Before e2e testing, Fargate tasks failed during init because <code>service.yml</code> pointed the awslogs driver at <code>leetcode-workers-dev</code> while <code>cluster.yml</code> created <code>/aws/ecs/leetcode-workers-dev</code>. Fixed by aligning the full path in the task definition.</p>
+      </div>
+
+      <div class="card">
+        <h2>Blocker 2 — Double-wrapped <code>resultSummary</code> (code bug)</h2>
+        <p>On the happy path, <code>_set_terminal</code> wrote:</p>
+        <div class="code-block">
+          <div class="code-file"><span>leetcode-workers/runs/dispatcher.py (before)</span><span class="badge-bad">bug</span></div>
+          <pre><code class="language-python">values[":rs"] = {"M": _marshall(result_summary)}</code></pre>
+        </div>
+        <p><code>_marshall(dict)</code> already returns <code>{"M": {...}}</code>, so the expression became a nested <code>M.M</code> shape. Boto3 rejected it client-side with <code>ParamValidationError</code> before DynamoDB was contacted.</p>
+        <p>Failure modes that set <code>result_summary=None</code> (compile/runtime errors, missing problem row) still worked — which made the bug look like a hang on successful submissions only.</p>
+      </div>
+
+      <div class="card">
+        <h2>Blocker 3 — Rogue worker on <code>test-workers-cluster</code></h2>
+        <table class="timeline">
+          <thead><tr><th>Property</th><th>Rogue task</th><th>Official task</th></tr></thead>
+          <tbody>
+            <tr><td>Cluster</td><td><code>test-workers-cluster</code></td><td><code>leetcode-workers-dev</code></td></tr>
+            <tr><td>Image</td><td><code>dev-latest</code> (old code)</td><td><code>dev-99eba5e1e1</code> (fixed)</td></tr>
+            <tr><td>Queue / table</td><td>Same work queue &amp; submissions table</td><td>Same</td></tr>
+            <tr><td>Logs</td><td>None configured</td><td><code>/aws/ecs/leetcode-workers-dev</code></td></tr>
+            <tr><td>Effect</td><td>Won the SQS race, left rows RUNNING</td><td>Retries skipped (already RUNNING)</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:0.75rem">Stuck rows showed <code>workerId=worker-64cc0bd9</code> with no matching log stream in the official log group — the smoking gun for a second consumer.</p>
+      </div>
+    </section>
+
+    <section id="fix" class="panel">
+      <div class="card">
+        <h2>Code change</h2>
+        <div class="code-block">
+          <div class="code-file"><span>leetcode-workers/runs/dispatcher.py</span><span class="badge-ok">fixed</span></div>
+          <pre><code class="language-python">if result_summary is not None:
+    set_clauses.append("resultSummary = :rs")
+    # _marshall(dict) already returns {"M": {...}} — do not wrap again.
+    values[":rs"] = _marshall(result_summary)</code></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Deploy steps taken</h2>
+        <ol>
+          <li>Build &amp; push image tag <code>dev-99eba5e1e1</code> to ECR</li>
+          <li>Update <code>leetcode-workers/serverless/config.yml</code> <code>workerImageTag</code></li>
+          <li><code>serverless deploy</code> → stack <code>leetcode-workers-dev</code></li>
+          <li>Stop rogue ECS task on <code>test-workers-cluster</code> (<code>ce2f9caae89d...</code>)</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Follow-ups (optional cleanup)</h2>
+        <ul>
+          <li>Delete or reset legacy rows stuck in <code>RUNNING</code> from debug runs</li>
+          <li>Ensure no other clusters/tasks poll <code>leetcode-submissions-bff-dev-work-queue</code></li>
+          <li>Add a unit test that asserts the marshalled <code>:rs</code> shape is valid for boto3 (tests currently mock <code>_set_terminal</code>)</li>
+          <li>Submission <code>970d4b3a...</code> references missing problem <code>e2etest2ec20d</code> — seed or delete</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="verify" class="panel">
+      <div class="card">
+        <h2>End-to-end proof</h2>
+        <p>After stopping the rogue worker and deploying the fixed image:</p>
+        <table class="timeline">
+          <thead><tr><th>Field</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>submissionId</td><td><code>7d6827300e164156b7cdcfba5d5b497d</code></td></tr>
+            <tr><td>Transition</td><td><code>PENDING → ACCEPTED</code> in ~1s</td></tr>
+            <tr><td>Worker</td><td><code>worker-477b4900</code> (official task)</td></tr>
+            <tr><td>Tests</td><td>3/3 passed</td></tr>
+          </tbody>
+        </table>
+        <div class="callout ok" style="margin-top:1rem">
+          CloudWatch log stream <code>worker/worker/d78a3df3...</code>:<br>
+          <code>[info] claim 7d682730... problem=e2et2a0516 lang=python</code><br>
+          <code>[info] 7d682730... -&gt; ACCEPTED (passed=3/3)</code>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>State machine (expected behaviour)</h2>
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: BFF PutItem + SQS send
+  PENDING --> RUNNING: worker conditional claim
+  RUNNING --> ACCEPTED: _set_terminal with resultSummary
+  RUNNING --> WRONG_ANSWER: partial pass
+  RUNNING --> COMPILE_ERROR: runner compileError
+  RUNNING --> RUNTIME_ERROR: runner runtimeError
+  RUNNING --> TIMEOUT: TimeLimitExceeded
+  ACCEPTED --> [*]
+        </pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/languages/python.min.js"></script>
+  <script>
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.panel).classList.add('active');
+      });
+    });
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+    hljs.highlightAll();
+  </script>
+</body>
+</html>
