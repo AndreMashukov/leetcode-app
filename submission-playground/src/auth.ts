@@ -42,23 +42,31 @@ export async function loginWithPassword(
   });
 }
 
-export function tokenExpiry(token: string): Date | null {
+/** Decode JWT payload segment (base64url → JSON). */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
-    if (typeof payload.exp !== "number") return null;
-    return new Date(payload.exp * 1000);
+    const segment = token.split(".")[1];
+    if (!segment) return null;
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
   } catch {
     return null;
   }
 }
 
+export function tokenExpiry(token: string): Date | null {
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== "number") return null;
+  return new Date(payload.exp * 1000);
+}
+
 export function tokenEmail(token: string): string | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
-    return typeof payload.email === "string" ? payload.email : null;
-  } catch {
-    return null;
-  }
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.email === "string" ? payload.email : null;
 }
 
 export function isTokenExpired(token: string): boolean {

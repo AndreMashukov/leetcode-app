@@ -32,13 +32,13 @@ export function saveConfig(config: AppConfig): void {
 const TOKEN_KEY = "leetcode-playground-id-token";
 
 export function loadToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "";
+  return sessionStorage.getItem(TOKEN_KEY) ?? "";
 }
 
 export function saveToken(token: string): void {
   if (token.trim()) {
-    localStorage.setItem(TOKEN_KEY, token.trim());
+    sessionStorage.setItem(TOKEN_KEY, token.trim());
   } else {
-    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
   }
 }

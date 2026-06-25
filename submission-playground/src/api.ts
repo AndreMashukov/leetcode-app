@@ -24,6 +24,7 @@ async function request<T>(
     method?: string;
     token?: string;
     body?: unknown;
+    signal?: AbortSignal;
   } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
@@ -40,6 +41,7 @@ async function request<T>(
     method: options.method ?? "GET",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   });
 
   const text = await res.text();
@@ -116,11 +118,12 @@ export function fetchSubmissionStatus(
   config: AppConfig,
   token: string,
   submissionId: string,
+  signal?: AbortSignal,
 ): Promise<SubmissionStatusResponse> {
   return request<SubmissionStatusResponse>(
     config.statusApi,
     `/submissions/${encodeURIComponent(submissionId)}/status`,
-    { token },
+    { token, signal },
   );
 }
 
@@ -133,15 +136,21 @@ export async function pollSubmissionStatus(
 ): Promise<SubmissionStatusResponse> {
   const delay = (ms: number) =>
     new Promise<void>((resolve, reject) => {
-      const id = window.setTimeout(resolve, ms);
-      signal?.addEventListener(
-        "abort",
-        () => {
-          window.clearTimeout(id);
-          reject(new DOMException("Polling aborted", "AbortError"));
-        },
-        { once: true },
-      );
+      if (signal?.aborted) {
+        reject(new DOMException("Polling aborted", "AbortError"));
+        return;
+      }
+      let timer: number;
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        reject(new DOMException("Polling aborted", "AbortError"));
+      };
+      timer = window.setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      signal?.addEventListener("abort", onAbort);
     });
 
   while (true) {
@@ -149,7 +158,12 @@ export async function pollSubmissionStatus(
       throw new DOMException("Polling aborted", "AbortError");
     }
 
-    const status = await fetchSubmissionStatus(config, token, submissionId);
+    const status = await fetchSubmissionStatus(
+      config,
+      token,
+      submissionId,
+      signal,
+    );
     onUpdate(status);
 
     if (

@@ -37,13 +37,13 @@ Pre-filled with the same dev API endpoints as `smoke-tests/`:
 | submissions-bff | `https://yffu5ff2t3.execute-api.ap-southeast-1.amazonaws.com` |
 | status-bff | `https://mulz4grtp5.execute-api.ap-southeast-1.amazonaws.com` |
 
-Settings and JWT are stored in `localStorage`. Expand **API & Cognito settings** to override endpoints.
+Settings are stored in `localStorage`; the JWT uses `sessionStorage` (tab-scoped). Expand **API & Cognito settings** to override endpoints.
 
 ## Troubleshooting
 
 ### HTTP 431 from Vite
 
-Stale auth cookies on `localhost` can exceed header limits. Clear cookies for `http://localhost:5173` and reload. JWT is stored in **localStorage**, not cookies.
+Stale auth cookies on `localhost` can exceed header limits. Clear cookies for `http://localhost:5173` and reload. JWT is stored in **sessionStorage**, not cookies.
 
 ## Notes
 

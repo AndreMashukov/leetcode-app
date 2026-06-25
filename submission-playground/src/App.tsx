@@ -59,6 +59,7 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [status, setStatus] = useState<SubmissionStatusResponse | null>(null);
   const pollAbort = useRef<AbortController | null>(null);
+  const loadRequestId = useRef(0);
 
   useEffect(() => {
     return () => pollAbort.current?.abort();
@@ -118,14 +119,17 @@ export default function App() {
   };
 
   const loadProblem = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setProblemError(null);
     setProblemNotFound(false);
     setProblemBusy(true);
     setProblem(null);
     try {
       const detail = await fetchProblem(config, slug.trim());
+      if (requestId !== loadRequestId.current) return;
       setProblem(detail);
     } catch (err) {
+      if (requestId !== loadRequestId.current) return;
       if (err instanceof ApiError && err.status === 404) {
         setProblemNotFound(true);
       }
@@ -137,6 +141,7 @@ export default function App() {
             : String(err),
       );
     } finally {
+      if (requestId !== loadRequestId.current) return;
       setProblemBusy(false);
     }
   }, [config, slug]);
