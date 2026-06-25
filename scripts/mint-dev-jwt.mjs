@@ -49,7 +49,9 @@ try {
 
   const token = out.AuthenticationResult?.IdToken;
   if (!token) {
-    console.error("No IdToken in response:", JSON.stringify(out, null, 2));
+    console.error(
+      `No IdToken in response${out.ChallengeName ? ` (challenge: ${out.ChallengeName})` : ""}.`,
+    );
     process.exit(1);
   }
 

@@ -43,9 +43,9 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 import { generateProblemId, isProblemId } from "../lib/problemId";
@@ -103,8 +103,18 @@ const MAX_CONSTRAINTS = 20;
 /** Max worker test cases per problem. */
 const MAX_TEST_CASES = 50;
 
-/** Max bytes per test case input/expected string. */
-const MAX_TEST_FIELD_LEN = 8192;
+/** Max UTF-8 bytes per test case input/expected string. */
+const MAX_TEST_FIELD_BYTES = 8192;
+
+/** Max total UTF-8 bytes across all starterCode string values. */
+const MAX_STARTER_CODE_BYTES = 32 * 1024;
+
+/** Stay under DynamoDB's 400 KiB item limit (both rows in the transaction). */
+const MAX_PROBLEM_WRITE_BYTES = 380 * 1024;
+
+/** Worker execution bounds (positive integers). */
+const MAX_TIME_LIMIT_MS = 60_000;
+const MAX_MEMORY_LIMIT_KB = 1_048_576;
 
 /** Max examples/constraints string length. */
 const MAX_EXAMPLE_FIELD_LEN = 4096;
@@ -326,12 +336,12 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
       }
       const t = tc as ProblemTestCase;
       if (
-        t.input.length > MAX_TEST_FIELD_LEN ||
-        t.expected.length > MAX_TEST_FIELD_LEN
+        utf8ByteLength(t.input) > MAX_TEST_FIELD_BYTES ||
+        utf8ByteLength(t.expected) > MAX_TEST_FIELD_BYTES
       ) {
         return json(400, {
           error: "bad_request",
-          message: `test case fields exceed max length ${MAX_TEST_FIELD_LEN}`,
+          message: `test case fields exceed max size ${MAX_TEST_FIELD_BYTES} bytes`,
         });
       }
       parsedTestCases.push({ input: t.input, expected: t.expected });
@@ -351,6 +361,7 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
       });
     }
     parsedStarterCode = {};
+    let starterCodeBytes = 0;
     for (const [k, v] of Object.entries(body.starterCode as Record<string, unknown>)) {
       if (typeof v !== "string") {
         return json(400, {
@@ -358,16 +369,28 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
           message: `starterCode.${k} must be a string`,
         });
       }
+      starterCodeBytes += utf8ByteLength(k) + utf8ByteLength(v);
       parsedStarterCode[k] = v;
+    }
+    if (starterCodeBytes > MAX_STARTER_CODE_BYTES) {
+      return json(413, {
+        error: "payload_too_large",
+        message: `starterCode exceeds ${MAX_STARTER_CODE_BYTES} bytes`,
+      });
     }
   }
 
   let timeLimitMs: number | undefined;
   if (body.timeLimitMs !== undefined) {
-    if (typeof body.timeLimitMs !== "number" || !Number.isFinite(body.timeLimitMs)) {
+    if (
+      typeof body.timeLimitMs !== "number" ||
+      !Number.isInteger(body.timeLimitMs) ||
+      body.timeLimitMs <= 0 ||
+      body.timeLimitMs > MAX_TIME_LIMIT_MS
+    ) {
       return json(400, {
         error: "bad_request",
-        message: 'field "timeLimitMs" must be a finite number',
+        message: `field "timeLimitMs" must be a positive integer ≤ ${MAX_TIME_LIMIT_MS}`,
       });
     }
     timeLimitMs = body.timeLimitMs;
@@ -375,29 +398,18 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
 
   let memoryLimitKb: number | undefined;
   if (body.memoryLimitKb !== undefined) {
-    if (typeof body.memoryLimitKb !== "number" || !Number.isFinite(body.memoryLimitKb)) {
+    if (
+      typeof body.memoryLimitKb !== "number" ||
+      !Number.isInteger(body.memoryLimitKb) ||
+      body.memoryLimitKb <= 0 ||
+      body.memoryLimitKb > MAX_MEMORY_LIMIT_KB
+    ) {
       return json(400, {
         error: "bad_request",
-        message: 'field "memoryLimitKb" must be a finite number',
+        message: `field "memoryLimitKb" must be a positive integer ≤ ${MAX_MEMORY_LIMIT_KB}`,
       });
     }
     memoryLimitKb = body.memoryLimitKb;
-  }
-
-  const existingSlug = await ddbDoc.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: "gsi3",
-      KeyConditionExpression: "slugKey = :sk",
-      ExpressionAttributeValues: { ":sk": `SLUG#${slug}` },
-      Limit: 1,
-    }),
-  );
-  if (existingSlug.Items?.length) {
-    return json(409, {
-      error: "conflict",
-      message: "a problem with this slug already exists",
-    });
   }
 
   const problemId = generateProblemId();
@@ -445,13 +457,56 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     // v1.1 introduces the per-tag slice rows + GSI2 query.
   };
 
-  await ddbDoc.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: row,
-      ConditionExpression: "attribute_not_exists(pk)",
-    }),
-  );
+  const slugLock = {
+    pk: `SLUG#${slug}`,
+    sk: "LOCK" as const,
+    problemPk: pk,
+    createdAt,
+  };
+
+  const writeBytes =
+    estimateItemBytes(row) + estimateItemBytes(slugLock);
+  if (writeBytes > MAX_PROBLEM_WRITE_BYTES) {
+    return json(413, {
+      error: "payload_too_large",
+      message: `problem payload exceeds ${MAX_PROBLEM_WRITE_BYTES} bytes`,
+    });
+  }
+
+  try {
+    await ddbDoc.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: slugLock,
+              ConditionExpression: "attribute_not_exists(pk)",
+            },
+          },
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: row,
+              ConditionExpression: "attribute_not_exists(pk)",
+            },
+          },
+        ],
+      }),
+    );
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      (err.name === "TransactionCanceledException" ||
+        err.name === "ConditionalCheckFailedException")
+    ) {
+      return json(409, {
+        error: "conflict",
+        message: "a problem with this slug already exists",
+      });
+    }
+    throw err;
+  }
 
   return json(201, {
     problemId,
@@ -619,6 +674,14 @@ function json(statusCode: number, body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   };
+}
+
+function utf8ByteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function estimateItemBytes(item: unknown): number {
+  return Buffer.byteLength(JSON.stringify(item), "utf8");
 }
 
 function parseLimit(raw: string | undefined): number {

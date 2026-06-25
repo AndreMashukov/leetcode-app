@@ -78,6 +78,11 @@ if (getRes.ok) {
   process.stderr.write(`two-sum already exists (problemId=${existing.problemId})\n`);
   process.exit(0);
 }
+if (getRes.status !== 404) {
+  const getBody = await getRes.text();
+  console.error(`GET /problems/two-sum failed (${getRes.status}): ${getBody}`);
+  process.exit(1);
+}
 
 const postRes = await fetch(`${PROBLEMS_API}/problems`, {
   method: "POST",
@@ -101,5 +106,11 @@ if (!postRes.ok) {
 
 process.stderr.write(`Seeded two-sum: ${body}\n`);
 
-const verify = await fetch(`${PROBLEMS_API}/problems/two-sum`);
-process.stderr.write(`GET /problems/two-sum → ${verify.status}\n`);
+try {
+  const verify = await fetch(`${PROBLEMS_API}/problems/two-sum`);
+  process.stderr.write(`GET /problems/two-sum → ${verify.status}\n`);
+} catch (err) {
+  process.stderr.write(
+    `Seeded two-sum, but verify GET failed: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+}
