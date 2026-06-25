@@ -39,7 +39,7 @@ custom:
   #   2. yarn deploy:workers                        # picks up new workerImageTag
   # Same tag, different code, would mean a force-redeploy of the
   # task definition (sls deploy function).
-  workerImageTag: ${opt:workerImageTag, 'dev-4407f4cf8f'}
+  workerImageTag: ${opt:workerImageTag, 'dev-99eba5e1e1'}
 
   # Use the default VPC for Fargate. All subnets are public and
   # mapPublicIpOnLaunch=true — no NAT required, tasks get public IPs

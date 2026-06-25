@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>leetcode-app — Why workers config values are hardcoded</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #111111;
+      --border: #27272a;
+      --text: #e4e4e7;
+      --muted: #a1a1aa;
+      --primary: #8b5cf6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      background: var(--card);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { color: var(--muted); margin-top: 0.35rem; font-size: 0.95rem; }
+    nav.tabs {
+      display: flex; gap: 0.25rem; padding: 0.75rem 2rem;
+      background: var(--card); border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    nav.tabs .tab {
+      background: transparent; border: 1px solid transparent;
+      color: var(--muted); padding: 0.5rem 1rem; border-radius: 8px;
+      cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+    }
+    nav.tabs .tab.active {
+      color: var(--primary); border-color: var(--border);
+      background: rgba(139, 92, 246, 0.12);
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 2rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
+    .card h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: var(--primary); }
+    .card p, .card li { color: var(--muted); font-size: 0.92rem; }
+    .card ul, .card ol { padding-left: 1.25rem; margin: 0.5rem 0; }
+    .callout {
+      border-left: 3px solid var(--primary);
+      padding: 0.75rem 1rem; margin: 1rem 0;
+      background: rgba(139, 92, 246, 0.06); border-radius: 0 8px 8px 0;
+      font-size: 0.9rem; color: var(--muted);
+    }
+    .callout.warn { border-color: var(--warn); background: rgba(245,158,11,0.06); }
+    .code-block { margin: 1rem 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .code-file {
+      background: #1a1a1a; padding: 0.5rem 0.85rem; font-size: 0.78rem;
+      font-family: ui-monospace, monospace; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; font-size: 0.82rem; }
+    table.compare { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.75rem; }
+    table.compare th, table.compare td {
+      text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    table.compare th { color: var(--muted); font-weight: 500; }
+    a { color: var(--primary); }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .pill {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .pill-primary { border-color: var(--primary); color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Workers config: hardcoded values</h1>
+    <p>Why <code>leetcode-workers/serverless/config.yml</code> pins the image tag, VPC id, and subnet ids instead of discovering them at deploy time.</p>
+    <div class="pill-row">
+      <span class="pill pill-primary">dev MVP</span>
+      <span class="pill">ap-southeast-1</span>
+      <span class="pill">account 579273601730</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-panel="overview">Overview</button>
+    <button class="tab" data-panel="image">workerImageTag</button>
+    <button class="tab" data-panel="network">VPC &amp; subnets</button>
+    <button class="tab" data-panel="later">When to un-hardcode</button>
+  </nav>
+
+  <main>
+    <section id="overview" class="panel active">
+      <div class="card">
+        <h2>The snippet in question</h2>
+        <div class="code-block">
+          <div class="code-file">leetcode-workers/serverless/config.yml (lines 42-51)</div>
+          <pre><code class="language-yaml">  workerImageTag: ${opt:workerImageTag, 'dev-99eba5e1e1'}
+
+  # Use the default VPC for Fargate. All subnets are public and
+  # mapPublicIpOnLaunch=true — no NAT required, tasks get public IPs
+  # via the IGW. v1 MVP; tighten to private subnets + NAT GW later.
+  defaultVpcId: vpc-0a17cc97d2e0e43cb
+  publicSubnetIds:
+    - subnet-0a896370c15814b45   # ap-southeast-1a
+    - subnet-02a0c6838d83aad0f   # ap-southeast-1b
+    - subnet-0cc63ba5fc3596f38   # ap-southeast-1c</code></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Hardcoded vs imported</h2>
+        <p>Most cross-stack wiring in this repo uses CloudFormation outputs (<code>${cf:stack.Output}</code>). These three fields are different: nothing in the leetcode stacks <em>owns</em> or <em>exports</em> them, so there is no <code>${cf:...}</code> source to import from.</p>
+        <table class="compare">
+          <thead>
+            <tr><th>Field</th><th>Source today</th><th>Why not dynamic?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>workQueueUrl</code>, tables, bus</td>
+              <td><code>${cf:leetcode-submissions-bff-...}</code></td>
+              <td>Owned by upstream stacks; exported on deploy.</td>
+            </tr>
+            <tr>
+              <td><code>ecrRepoUri</code></td>
+              <td><code>${cf:leetcode-worker-images-...}</code></td>
+              <td>ECR repo is a stack output; only the <em>tag</em> is pinned locally.</td>
+            </tr>
+            <tr>
+              <td><code>workerImageTag</code></td>
+              <td>Literal default + optional CLI override</td>
+              <td>Tag is chosen at build time, not by CloudFormation.</td>
+            </tr>
+            <tr>
+              <td><code>defaultVpcId</code>, <code>publicSubnetIds</code></td>
+              <td>Account default VPC (pre-existing AWS resource)</td>
+              <td>No leetcode stack creates the VPC; MVP skips SSM lookup.</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          Design rule from <code>design-research.md</code> section 10: <strong>all cross-stack wiring via CFN outputs; no SSM at MVP.</strong> VPC ids are account infrastructure, not stack outputs, so they land as checked-in literals for the one dev account we deploy to.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Related docs</h2>
+        <ul>
+          <li><a href="architecture/index.html">architecture/index.html</a> — platform overview</li>
+          <li><a href="fix/submission-e2e/index.html">fix/submission-e2e/index.html</a> — why pinning <code>workerImageTag</code> mattered for e2e</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="image" class="panel">
+      <div class="card">
+        <h2>Why pin <code>workerImageTag</code>?</h2>
+        <p>The task definition references <code>${ecrRepoUri}:${workerImageTag}</code>. That tag must identify an <em>exact</em> image digest the dispatcher code was tested against.</p>
+        <ul>
+          <li><strong>ECR tag immutability</strong> — the worker-images repo rejects re-pushing the same tag with different content. Each build gets a fresh <code>dev-&lt;uuid10&gt;</code> tag; config must record which one Fargate pulls.</li>
+          <li><strong>No floating <code>dev-latest</code> in config</strong> — a mutable tag hides which code is running. A rogue debug task on <code>dev-latest</code> once stole SQS messages while the official service used a different revision.</li>
+          <li><strong>Deploy = explicit promotion</strong> — bump the literal after <code>scripts/build-runners.sh</code> (or CodeBuild), then <code>yarn deploy:workers</code>. Git history shows exactly which image a deploy rolled out.</li>
+          <li><strong>Override still exists</strong> — <code>${opt:workerImageTag, 'dev-99eba5e1e1'}</code> lets CI pass <code>--workerImageTag</code> without editing the file, but the default in repo is never left blank.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Roll-forward workflow</h2>
+        <ol>
+          <li>Build and push: <code>bash scripts/build-runners.sh</code> (prints new tag)</li>
+          <li>Update the default in <code>config.yml</code> (or pass <code>--workerImageTag</code>)</li>
+          <li>Deploy: <code>yarn deploy:workers</code> — task definition picks up the new image</li>
+        </ol>
+        <div class="callout warn">
+          Deploying worker code without updating the tag leaves Fargate on the old image even if ECR has a newer build under a different tag.
+        </div>
+      </div>
+    </section>
+
+    <section id="network" class="panel">
+      <div class="card">
+        <h2>Why hardcode VPC and subnet ids?</h2>
+        <p>Fargate tasks need an <code>awsvpc</code> network: a VPC, subnets, and (here) a public IP so they can reach AWS public endpoints without a NAT gateway.</p>
+        <h3>Not exported by any leetcode stack</h3>
+        <p>Unlike the submissions queue or problems table, the default VPC predates this project. No CloudFormation stack in the deploy order creates <code>VpcId</code> or <code>SubnetIds</code> outputs for workers to import.</p>
+        <h3>No SSM Parameter Store at MVP</h3>
+        <p>The sibling apps (pastebin, url-shortener) also avoid SSM for v1. Alternatives like <code>${ssm:/leetcode/vpc-id}</code> add a parameter lifecycle, IAM for reads, and a second place to look when debugging deploy failures.</p>
+        <h3>Account- and region-specific</h3>
+        <p><code>vpc-0a17cc97d2e0e43cb</code> is the default VPC in account <code>579273601730</code>, region <code>ap-southeast-1</code>. Another account or region would have different ids; hardcoding documents "this is the dev target" explicitly.</p>
+        <h3>Public subnets on purpose (dev MVP)</h3>
+        <p>Comments in config call out <code>AssignPublicIp: ENABLED</code> and subnets with <code>mapPublicIpOnLaunch=true</code>. Workers reach SQS, DynamoDB, EventBridge, ECR, and CloudWatch over the public AWS endpoint hostnames via the internet gateway — no NAT hourly charge while iterating.</p>
+      </div>
+
+      <div class="card">
+        <h2>How service.yml uses these values</h2>
+        <div class="code-block">
+          <div class="code-file">leetcode-workers/serverless/service.yml (excerpt)</div>
+          <pre><code class="language-yaml">WorkerSecurityGroup:
+  Properties:
+    VpcId: ${self:custom.defaultVpcId}
+
+WorkerService:
+  Properties:
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        AssignPublicIp: ENABLED
+        Subnets: ${self:custom.publicSubnetIds}</code></pre>
+        </div>
+        <p>Wrong VPC or subnet ids fail at task placement time with opaque ECS errors. Keeping literals in config makes "which network" grep-able in one file.</p>
+      </div>
+
+      <div class="card">
+        <h2>Design doc vs current dev wiring</h2>
+        <p><code>design-research.md</code> section 12 describes the <strong>production-shaped</strong> target: private subnets, no NAT, VPC endpoints for SQS/DDB/S3/ECR/Logs/EventBridge. That is the v2 hardening path.</p>
+        <p>Today's hardcoded public subnets are a deliberate dev shortcut: fewer moving parts, lower cost, faster bring-up. When networking hardens, expect new stack outputs or a dedicated <code>leetcode-network</code> stack — not magic discovery of the default VPC.</p>
+      </div>
+    </section>
+
+    <section id="later" class="panel">
+      <div class="card">
+        <h2>When to stop hardcoding</h2>
+        <table class="compare">
+          <thead>
+            <tr><th>Value</th><th>v2 approach</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>workerImageTag</code></td>
+              <td>CI sets <code>--workerImageTag</code> from the build artifact; prd may pin semver tags. Default in repo stays a known-good dev tag.</td>
+            </tr>
+            <tr>
+              <td><code>defaultVpcId</code></td>
+              <td>Export from a <code>leetcode-network</code> (or similar) stack; import via <code>${cf:...}</code> like other cross-stack refs.</td>
+            </tr>
+            <tr>
+              <td><code>publicSubnetIds</code></td>
+              <td>Replace with private subnet outputs + VPC endpoint stack; remove public IP assignment on tasks.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>What stays hardcoded even in v2</h2>
+        <p>The <em>pattern</em> of pinning deploy inputs in git does not go away — only the <em>source</em> changes:</p>
+        <ul>
+          <li>Image tag remains an explicit promotion step (never an implicit <code>:latest</code> in production).</li>
+          <li>Network ids move from literals to stack outputs, but workers still read them from <code>config.yml</code> — not runtime discovery inside the container.</li>
+        </ul>
+        <div class="callout">
+          Hardcoding here means <strong>explicit, reviewable deploy inputs</strong>, not "never use CloudFormation imports."
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/languages/yaml.min.js"></script>
+  <script>
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.panel).classList.add('active');
+      });
+    });
+    hljs.highlightAll();
+  </script>
+</body>
+</html>

@@ -42,9 +42,10 @@ import type {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  PutCommand,
+  GetCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 import { generateProblemId, isProblemId } from "../lib/problemId";
@@ -54,6 +55,8 @@ import type {
   ProblemExample,
   ProblemRow,
   ProblemSummary,
+  ProblemTestCase,
+  StarterCode,
 } from "../models/problem";
 
 const ddb = new DynamoDBClient({});
@@ -96,6 +99,22 @@ const MAX_EXAMPLES = 10;
 
 /** Max constraints strings per problem. */
 const MAX_CONSTRAINTS = 20;
+
+/** Max worker test cases per problem. */
+const MAX_TEST_CASES = 50;
+
+/** Max UTF-8 bytes per test case input/expected string. */
+const MAX_TEST_FIELD_BYTES = 8192;
+
+/** Max total UTF-8 bytes across all starterCode string values. */
+const MAX_STARTER_CODE_BYTES = 32 * 1024;
+
+/** Stay under DynamoDB's 400 KiB item limit (both rows in the transaction). */
+const MAX_PROBLEM_WRITE_BYTES = 380 * 1024;
+
+/** Worker execution bounds (positive integers). */
+const MAX_TIME_LIMIT_MS = 60_000;
+const MAX_MEMORY_LIMIT_KB = 1_048_576;
 
 /** Max examples/constraints string length. */
 const MAX_EXAMPLE_FIELD_LEN = 4096;
@@ -287,6 +306,112 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     }
   }
 
+  // Optional worker fields — stored on the row for leetcode-workers.
+  let parsedTestCases: ProblemTestCase[] | undefined;
+  if (body.testCases !== undefined) {
+    if (!Array.isArray(body.testCases)) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "testCases" must be an array',
+      });
+    }
+    if (body.testCases.length > MAX_TEST_CASES) {
+      return json(400, {
+        error: "bad_request",
+        message: `field "testCases" exceeds max of ${MAX_TEST_CASES}`,
+      });
+    }
+    parsedTestCases = [];
+    for (const tc of body.testCases) {
+      if (
+        typeof tc !== "object" ||
+        tc === null ||
+        typeof (tc as ProblemTestCase).input !== "string" ||
+        typeof (tc as ProblemTestCase).expected !== "string"
+      ) {
+        return json(400, {
+          error: "bad_request",
+          message: 'each test case must have string "input" and "expected"',
+        });
+      }
+      const t = tc as ProblemTestCase;
+      if (
+        utf8ByteLength(t.input) > MAX_TEST_FIELD_BYTES ||
+        utf8ByteLength(t.expected) > MAX_TEST_FIELD_BYTES
+      ) {
+        return json(400, {
+          error: "bad_request",
+          message: `test case fields exceed max size ${MAX_TEST_FIELD_BYTES} bytes`,
+        });
+      }
+      parsedTestCases.push({ input: t.input, expected: t.expected });
+    }
+  }
+
+  let parsedStarterCode: StarterCode | undefined;
+  if (body.starterCode !== undefined) {
+    if (
+      typeof body.starterCode !== "object" ||
+      body.starterCode === null ||
+      Array.isArray(body.starterCode)
+    ) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "starterCode" must be an object of string values',
+      });
+    }
+    parsedStarterCode = {};
+    let starterCodeBytes = 0;
+    for (const [k, v] of Object.entries(body.starterCode as Record<string, unknown>)) {
+      if (typeof v !== "string") {
+        return json(400, {
+          error: "bad_request",
+          message: `starterCode.${k} must be a string`,
+        });
+      }
+      starterCodeBytes += utf8ByteLength(k) + utf8ByteLength(v);
+      parsedStarterCode[k] = v;
+    }
+    if (starterCodeBytes > MAX_STARTER_CODE_BYTES) {
+      return json(413, {
+        error: "payload_too_large",
+        message: `starterCode exceeds ${MAX_STARTER_CODE_BYTES} bytes`,
+      });
+    }
+  }
+
+  let timeLimitMs: number | undefined;
+  if (body.timeLimitMs !== undefined) {
+    if (
+      typeof body.timeLimitMs !== "number" ||
+      !Number.isInteger(body.timeLimitMs) ||
+      body.timeLimitMs <= 0 ||
+      body.timeLimitMs > MAX_TIME_LIMIT_MS
+    ) {
+      return json(400, {
+        error: "bad_request",
+        message: `field "timeLimitMs" must be a positive integer ≤ ${MAX_TIME_LIMIT_MS}`,
+      });
+    }
+    timeLimitMs = body.timeLimitMs;
+  }
+
+  let memoryLimitKb: number | undefined;
+  if (body.memoryLimitKb !== undefined) {
+    if (
+      typeof body.memoryLimitKb !== "number" ||
+      !Number.isInteger(body.memoryLimitKb) ||
+      body.memoryLimitKb <= 0 ||
+      body.memoryLimitKb > MAX_MEMORY_LIMIT_KB
+    ) {
+      return json(400, {
+        error: "bad_request",
+        message: `field "memoryLimitKb" must be a positive integer ≤ ${MAX_MEMORY_LIMIT_KB}`,
+      });
+    }
+    memoryLimitKb = body.memoryLimitKb;
+  }
+
   const problemId = generateProblemId();
   const createdAt = new Date().toISOString();
   const pk = `PROBLEM#${problemId}`;
@@ -310,6 +435,10 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     // the same row. KEYS_ONLY projection is enough — submissions-bff
     // reads problemId off the row's primary key (DDB copies it in).
     slugKey: `SLUG#${slug}`,
+    ...(parsedTestCases ? { testCases: parsedTestCases } : {}),
+    ...(parsedStarterCode ? { starterCode: parsedStarterCode } : {}),
+    ...(timeLimitMs !== undefined ? { timeLimitMs } : {}),
+    ...(memoryLimitKb !== undefined ? { memoryLimitKb } : {}),
     // GSI2 attributes: each tag gets its own (tagSlug, tagGsisk). We
     // store ONE row per (problemId, tag) pair? No — DDB single-table
     // design stores ONE row per logical entity. The GSI2 index
@@ -328,13 +457,56 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     // v1.1 introduces the per-tag slice rows + GSI2 query.
   };
 
-  await ddbDoc.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: row,
-      ConditionExpression: "attribute_not_exists(pk)",
-    }),
-  );
+  const slugLock = {
+    pk: `SLUG#${slug}`,
+    sk: "LOCK" as const,
+    problemPk: pk,
+    createdAt,
+  };
+
+  const writeBytes =
+    estimateItemBytes(row) + estimateItemBytes(slugLock);
+  if (writeBytes > MAX_PROBLEM_WRITE_BYTES) {
+    return json(413, {
+      error: "payload_too_large",
+      message: `problem payload exceeds ${MAX_PROBLEM_WRITE_BYTES} bytes`,
+    });
+  }
+
+  try {
+    await ddbDoc.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: slugLock,
+              ConditionExpression: "attribute_not_exists(pk)",
+            },
+          },
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: row,
+              ConditionExpression: "attribute_not_exists(pk)",
+            },
+          },
+        ],
+      }),
+    );
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      (err.name === "TransactionCanceledException" ||
+        err.name === "ConditionalCheckFailedException")
+    ) {
+      return json(409, {
+        error: "conflict",
+        message: "a problem with this slug already exists",
+      });
+    }
+    throw err;
+  }
 
   return json(201, {
     problemId,
@@ -437,19 +609,32 @@ export const getProblemBySlug: APIGatewayProxyHandlerV2 = async (event) => {
     return json(400, { error: "bad_request", message: "missing slug" });
   }
 
-  // v1 does a Scan with FilterExpression on `slug`. At MVP scale
-  // (<10 K problems) this is fast enough. v1.1 adds a `slug` GSI for
-  // direct GetItem-style lookup.
-  const result = await ddbDoc.send(
-    new ScanCommand({
+  // gsi3 slug lookup — Scan+Limit is wrong on DDB (Limit caps items
+  // *scanned*, not matches). Same pattern as submissions-bff.
+  const slugLookup = await ddbDoc.send(
+    new QueryCommand({
       TableName: TABLE_NAME,
-      FilterExpression: "slug = :slug",
-      ExpressionAttributeValues: { ":slug": slug },
+      IndexName: "gsi3",
+      KeyConditionExpression: "slugKey = :sk",
+      ExpressionAttributeValues: { ":sk": `SLUG#${slug}` },
       Limit: 1,
     }),
   );
+  const slugRow = slugLookup.Items?.[0] as
+    | { pk?: string; sk?: string }
+    | undefined;
+  if (!slugRow?.pk || !slugRow.sk) {
+    return json(404, { error: "not_found", message: "problem not found" });
+  }
 
-  const row = result.Items?.[0] as ProblemRow | undefined;
+  const got = await ddbDoc.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { pk: slugRow.pk, sk: slugRow.sk },
+      ConsistentRead: false,
+    }),
+  );
+  const row = got.Item as ProblemRow | undefined;
   if (!row) {
     return json(404, { error: "not_found", message: "problem not found" });
   }
@@ -489,6 +674,14 @@ function json(statusCode: number, body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   };
+}
+
+function utf8ByteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function estimateItemBytes(item: unknown): number {
+  return Buffer.byteLength(JSON.stringify(item), "utf8");
 }
 
 function parseLimit(raw: string | undefined): number {

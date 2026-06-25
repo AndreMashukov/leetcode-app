@@ -1,0 +1,22 @@
+{
+  "name": "submission-playground",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "submission-playground/src",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "NODE_OPTIONS='--max-http-header-size=65536' vite",
+        "cwd": "submission-playground"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "submission-playground"
+      }
+    }
+  }
+}

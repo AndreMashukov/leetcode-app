@@ -12,6 +12,7 @@
     "leetcode-status-bff",
     "leetcode-worker-images",
     "leetcode-workers",
+    "submission-playground",
     "libs/*"
   ],
   "engines": {
@@ -41,7 +42,12 @@
     "package:worker-images": "NX_SKIP_NATIVE_FILE_CACHE=true nx run leetcode-worker-images:package",
     "deploy:worker-images": "NX_SKIP_NATIVE_FILE_CACHE=true nx run leetcode-worker-images:deploy",
     "package:workers": "NX_SKIP_NATIVE_FILE_CACHE=true nx run leetcode-workers:package",
-    "deploy:workers": "NX_SKIP_NATIVE_FILE_CACHE=true nx run leetcode-workers:deploy"
+    "deploy:workers": "NX_SKIP_NATIVE_FILE_CACHE=true nx run leetcode-workers:deploy",
+    "dev:playground": "NX_SKIP_NATIVE_FILE_CACHE=true nx run submission-playground:serve",
+    "build:playground": "NX_SKIP_NATIVE_FILE_CACHE=true nx run submission-playground:build",
+    "mint:jwt": "node scripts/mint-dev-jwt.mjs",
+    "set:dev-user": "node scripts/set-dev-cognito-user.mjs",
+    "seed:two-sum": "node scripts/seed-two-sum-problem.mjs"
   },
   "devDependencies": {
     "@nx/eslint": "22.6.5",

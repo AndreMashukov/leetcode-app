@@ -182,7 +182,8 @@ def _set_terminal(
     }
     if result_summary is not None:
         set_clauses.append("resultSummary = :rs")
-        values[":rs"] = {"M": _marshall(result_summary)}
+        # _marshall(dict) already returns {"M": {...}} — do not wrap again.
+        values[":rs"] = _marshall(result_summary)
     if error_message is not None:
         set_clauses.append("errorMessage = :err")
         values[":err"] = {"S": error_message}

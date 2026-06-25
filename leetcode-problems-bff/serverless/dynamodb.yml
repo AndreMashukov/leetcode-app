@@ -30,6 +30,7 @@ iamRoleStatements:
     - dynamodb:Query
     - dynamodb:GetItem
     - dynamodb:PutItem
+    - dynamodb:TransactWriteItems
     - dynamodb:UpdateItem
     - dynamodb:DeleteItem
     # v1 listProblems + getProblemBySlug both Scan the table.

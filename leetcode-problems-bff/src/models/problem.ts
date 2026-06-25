@@ -42,6 +42,21 @@ export interface ProblemExample {
   explanation?: string;
 }
 
+/** A worker test case (stdin/stdout). Stored on the problem row. */
+export interface ProblemTestCase {
+  input: string;
+  expected: string;
+}
+
+/** Per-language starter snippets + entrypoint names for the worker. */
+export interface StarterCode {
+  python?: string;
+  pythonEntrypoint?: string;
+  javascript?: string;
+  javascriptEntrypoint?: string;
+  [key: string]: string | undefined;
+}
+
 /** Persistence row in ProblemsTable.
  *
  * No `expires_at` — problems are not expirable at MVP. v1.1 may add a
@@ -83,6 +98,11 @@ export interface ProblemRow {
   // GSI3 — slug lookup for cross-stack callers (submissions-bff).
   // Every row has exactly one slug, so this is a 1:1 alias.
   slugKey: `SLUG#${string}`;
+  /** Worker fields — optional at create; required for submissions to run. */
+  testCases?: ProblemTestCase[];
+  starterCode?: StarterCode;
+  timeLimitMs?: number;
+  memoryLimitKb?: number;
 }
 
 /** Public-facing summary (used in list endpoints — no full body). */
