@@ -1,0 +1,45 @@
+# leetcode-auth
+#
+# Owns the single Cognito UserPool shared by every BFF in the
+# leetcode system. The problems-bff, submissions-bff, and status-bff
+# stacks reference ${cf:leetcode-auth-${opt:stage}.UserPoolId, '...'}
+# and ${cf:...UserPoolClientId, '...'} for JWT validation.
+#
+# Why a separate stack (and not embedded in problems-bff)?
+# - problems-bff / submissions-bff / status-bff are independently
+#   versioned. Putting Cognito inside any one of them would make
+#   "auth" get redeployed with every BFF code change.
+# - The UserPool is a system-wide resource; it belongs at the same
+#   architectural level as the event bus (its own stack).
+#
+# Resources:
+#   - 1 AWS::Cognito::UserPool
+#   - 1 AWS::Cognito::UserPoolClient (for backend-driven JWT issuance
+#     during e2e / smoke tests via ALLOW_ADMIN_USER_PASSWORD_AUTH;
+#     this dev-only flow is removed in prd via stage params)
+#   - 1 AWS::Cognito::UserPoolDomain (optional, for Hosted UI)
+#
+# Cross-stack consumers reference it via:
+#   ${cf:leetcode-auth-${opt:stage}.UserPoolId}
+#   ${cf:leetcode-auth-${opt:stage}.UserPoolClientId}
+#   ${cf:leetcode-auth-${opt:stage}.IssuerUrl}
+
+service: ${self:custom.subsys}-${self:custom.role}
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-1'}
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  stackTags: ${file(serverless/tags.yml)}
+
+custom: ${file(serverless/config.yml):custom}
+
+resources:
+  - ${file(serverless/cognito.yml):resources}
+
+# No functions, no events. Auth is pure infrastructure (one Cognito
+# UserPool + one client + optional domain). All authentication happens
+# at API Gateway HTTP API authorizers in the BFF stacks.

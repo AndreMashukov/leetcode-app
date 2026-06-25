@@ -1,0 +1,50 @@
+resources:
+  Resources:
+    # The combined Python 3.12 + Node 20 worker image repository.
+    #
+    # Image immutability: tags cannot be overwritten once pushed.
+    # This is the right default for "we pinned Fargate task to
+    # image tag X, an overwriting push would silently change
+    # in-flight tasks' behavior." Combined with a CI pipeline that
+    # always uses a unique tag (git SHA), this gives reproducible
+    # worker deployments.
+    #
+    # Scan on push: enabled. Adds ~30s to a push and ~$0.09/GB
+    # scanned, but catches CVEs in base images / Node / Python
+    # before they reach a Fargate task.
+    #
+    # Lifecycle: keep last 30 images. With one build per merged PR
+    # this is roughly 30 deploys of history; more than enough for
+    # rollback, not enough to clutter the registry.
+    #
+    # NOTE: AWS::ECR::Repository LifecyclePolicy IS a property of
+    # the repo (not a separate resource). Key name is `LifecyclePolicy`,
+    # not `LifecycleConfiguration`.
+    WorkerImageRepo:
+      Type: AWS::ECR::Repository
+      Properties:
+        RepositoryName: ${self:service}-${opt:stage}-worker-images
+        ImageTagMutability: IMMUTABLE
+        ImageScanningConfiguration:
+          ScanOnPush: true
+        EncryptionConfiguration:
+          EncryptionType: AES256
+        LifecyclePolicy:
+          LifecyclePolicyText: "{\"rules\":[{\"rulePriority\":1,\"description\":\"expire images older than 30\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":30},\"action\":{\"type\":\"expire\"}}]}"
+
+  Outputs:
+    EcrRepoName:
+      Value:
+        Ref: WorkerImageRepo
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EcrRepoName
+    EcrRepoUri:
+      Value:
+        Fn::Sub: "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WorkerImageRepo}"
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EcrRepoUri
+    EcrRepoArn:
+      Value:
+        Fn::GetAtt: [WorkerImageRepo, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EcrRepoArn

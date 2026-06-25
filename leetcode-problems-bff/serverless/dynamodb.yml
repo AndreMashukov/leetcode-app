@@ -1,0 +1,44 @@
+# Problems table (Single-Table Design — design §4):
+#   pk         = "PROBLEM#<problemId>"  (HASH)
+#   sk         = "META"                 (RANGE)
+#   authorSub  = <cognito sub>          (GSI1 HASH key — GET /me/problems)
+#   gsisk      = "<createdAt>#<problemId>"  (GSI1 RANGE — newest-first)
+#   tagSlug    = "TAG#<tag>"            (GSI2 HASH key — sparse)
+#   tagGsisk   = "slug#<problemId>"     (GSI2 RANGE — pagination cursor)
+#
+# GSI1 enables GET /me/problems: query by authorSub, sorted by createdAt
+# desc. Authored problems list, like LeetCode's "my submissions" page.
+#
+# GSI2 is sparse — only rows with tags get a value. Each row has one
+# (tagSlug, tagGsisk) entry per tag, so GET /problems?tag=array queries
+# each tag's GSI2 slice and unions the results client-side. For v1 we
+# only support single-tag filtering; multi-tag is a v1.1 enhancement.
+#
+# DDB stream (NEW_AND_OLD_IMAGES) feeds the trigger lambda, which is
+# the SOLE producer of ProblemCreated / ProblemDeleted events on the
+# bus. submissions-bff subscribes to ProblemCreated to populate its
+# lean problem view.
+
+tableArn:
+  Fn::GetAtt: [ ProblemsTable, Arn ]
+tableStreamArn:
+  Fn::GetAtt: [ ProblemsTable, StreamArn ]
+
+iamRoleStatements:
+  Effect: Allow
+  Action:
+    - dynamodb:Query
+    - dynamodb:GetItem
+    - dynamodb:PutItem
+    - dynamodb:UpdateItem
+    - dynamodb:DeleteItem
+    # v1 listProblems + getProblemBySlug both Scan the table.
+    # v1.1 replaces these with GSI Query + a slug-indexed GetItem.
+    - dynamodb:Scan
+  Resource:
+    - Fn::GetAtt: [ ProblemsTable, Arn ]
+    - Fn::Join:
+        - '/'
+        - - Fn::GetAtt: [ ProblemsTable, Arn ]
+          - index
+          - '*'

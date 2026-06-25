@@ -1,0 +1,115 @@
+# DDB table + SQS queue + DLQ + IAM-scoped cross-stack reads.
+#
+# Table layout (see design §3, "leetcode-submissions-bff"):
+#   pk            SUB#<ulid>           HASH
+#   sk            META                 RANGE
+#   gsi1pk        USER#<cognitoSub>    (GSI1 HASH)
+#   gsi1sk        <submittedAt>        (GSI1 RANGE)
+#   gsi2pk        STATUS#RUNNING       (GSI2 HASH, sparse)
+#   gsi2sk        <submittedAt>        (GSI2 RANGE)
+#
+# Why two GSIs:
+#   gsi1 = list-by-user (GET /me/submissions).
+#   gsi2 = sparse index, populated only when status=RUNNING. Used
+#          by a future operator/admin tool to find stuck jobs. At
+#          MVP only gsi1 is read; gsi2 is provisioned in case
+#          workers ever need to coordinate without an additional
+#          write path.
+#
+# Why no stream: workers update rows in place via UpdateItem
+# with conditional expressions (status=PENDING -> RUNNING, etc.).
+# The bus is the wrong channel for fine-grained worker writes
+# (volume + size + no fan-out need).
+
+resources:
+  Resources:
+    # --- DDB submissions table ---
+    SubmissionsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        TableName: ${self:service}-${opt:stage}-submissions
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: gsi1pk
+            AttributeType: S
+          - AttributeName: gsi1sk
+            AttributeType: S
+          - AttributeName: gsi2pk
+            AttributeType: S
+          - AttributeName: gsi2sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: gsi1
+            KeySchema:
+              - AttributeName: gsi1pk
+                KeyType: HASH
+              - AttributeName: gsi1sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: gsi2
+            KeySchema:
+              - AttributeName: gsi2pk
+                KeyType: HASH
+              - AttributeName: gsi2sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+
+    # --- Work queue + DLQ ---
+    # VisibilityTimeout 180s: 3x the 60s worker exec timeout + DDB
+    # update + EventBridge publish + safety margin. Workers can
+    # extend visibility if a future language has longer wall time.
+    WorkQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${opt:stage}-work-queue
+        MessageRetentionPeriod: 345600  # 4 days
+        VisibilityTimeout: 180
+        RedrivePolicy:
+          deadLetterTargetArn:
+            Fn::GetAtt: [WorkDlq, Arn]
+          maxReceiveCount: 3
+
+    WorkDlq:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${opt:stage}-work-queue-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        VisibilityTimeout: 180
+
+  Outputs:
+    SubmissionsTableName:
+      Value:
+        Ref: SubmissionsTable
+    SubmissionsTableArn:
+      Value:
+        Fn::GetAtt: [SubmissionsTable, Arn]
+    WorkQueueUrl:
+      Value:
+        Ref: WorkQueue
+    WorkQueueArn:
+      Value:
+        Fn::GetAtt: [WorkQueue, Arn]
+    DlqUrl:
+      Value:
+        Ref: WorkDlq
+    DlqArn:
+      Value:
+        Fn::GetAtt: [WorkDlq, Arn]
+    ApiEndpoint:
+      Value:
+        Fn::Sub: 'https://${HttpApi}.execute-api.${opt:region}.amazonaws.com'

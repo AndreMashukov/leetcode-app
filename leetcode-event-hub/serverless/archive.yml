@@ -1,0 +1,27 @@
+resources:
+  Resources:
+    # Archive every event on the bus EXCEPT faults. This gives us a
+    # full event-sourced record of every domain event in the system
+    # for replay, debugging, and future batch analytics.
+    Archive:
+      Type: AWS::Events::Archive
+      Properties:
+        ArchiveName: ${self:service}-${opt:stage}-archive
+        SourceArn:
+          Fn::GetAtt: [Bus, Arn]
+        # Match by detail-type (not detail.type) so DDB-CDC re-emits
+        # that don't put a "type" field in detail still get archived.
+        # See nx-monorepo-serverless-stack skill: "Cross-stack archive
+        # filter pitfall" — events whose detail body has no "type"
+        # would be silently excluded by a detail.type matcher.
+        EventPattern:
+          detail-type:
+            - anything-but: fault
+
+  Outputs:
+    archiveName:
+      Value:
+        Ref: Archive
+    archiveArn:
+      Value:
+        Fn::GetAtt: [Archive, Arn]

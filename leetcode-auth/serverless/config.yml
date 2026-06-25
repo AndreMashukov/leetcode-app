@@ -1,0 +1,11 @@
+params:
+  default:
+    logRetentionInDays: 3
+  prd:
+    logRetentionInDays: 30
+
+custom:
+  partition: aws
+  org: mashukov
+  subsys: leetcode
+  role: auth

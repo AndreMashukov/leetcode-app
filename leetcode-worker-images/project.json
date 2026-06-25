@@ -1,0 +1,38 @@
+{
+  "name": "leetcode-worker-images",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "leetcode-worker-images/serverless",
+  "projectType": "application",
+  "tags": ["type:app", "scope:leetcode", "role:worker-images"],
+  "implicitDependencies": [],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json",
+        "cwd": "leetcode-worker-images"
+      }
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless package --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-worker-images"
+      }
+    },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless deploy --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-worker-images"
+      }
+    },
+    "info": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless info --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-worker-images"
+      }
+    }
+  }
+}

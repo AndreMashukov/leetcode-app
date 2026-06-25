@@ -1,0 +1,10 @@
+# leetcode-workers/serverless/tags.yml
+# Stack-level tags applied to every resource. Mirrors the
+# pattern used by the other leetcode-* stacks.
+
+stackTags:
+  subsystem: leetcode
+  service: ${self:service}
+  stage: ${self:provider.stage}
+  owner: ${self:custom.org}
+  repo: ${self:custom.org}/leetcode-app

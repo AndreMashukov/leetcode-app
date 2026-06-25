@@ -1,0 +1,122 @@
+# leetcode-workers/serverless/iam.yml
+#
+# Three roles:
+#  - ExecutionRole: used by ECS at task startup to pull the image
+#    from ECR and write to CloudWatch Logs. Grants
+#    ecr:GetAuthorizationToken, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer,
+#    logs:CreateLogStream, logs:PutLogEvents.
+#  - TaskRole: assumed by the running container (the dispatcher).
+#    Grants the runtime permissions the dispatcher needs:
+#    sqs:ReceiveMessage/DeleteMessage/ChangeMessageVisibility on the
+#    work queue; dynamodb:GetItem/UpdateItem/Query on submissions and
+#    problems tables; events:PutEvents on the bus (for
+#    SubmissionAccepted/Failed events); s3:PutObject on the failure
+#    log bucket (created in resources.yml).
+#
+# We deliberately do NOT grant logs:CreateLogGroup on the TaskRole —
+# the log group is pre-created in cluster.yml so the execution role
+# (which has CreateLogGroup) handles it once.
+
+resources:
+  Resources:
+    ExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${opt:stage}-execution-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal: { Service: ecs-tasks.amazonaws.com }
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        Policies:
+          - PolicyName: ecr-pull
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ecr:GetAuthorizationToken
+                  Resource: '*'
+                - Effect: Allow
+                  Action:
+                    - ecr:BatchGetImage
+                    - ecr:GetDownloadUrlForLayer
+                  Resource:
+                    - Fn::Sub: ${cf:leetcode-worker-images-${opt:stage}.EcrRepoArn}
+
+    TaskRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${opt:stage}-task-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal: { Service: ecs-tasks.amazonaws.com }
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: dispatcher-perms
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # SQS work queue
+                - Effect: Allow
+                  Action:
+                    - sqs:ReceiveMessage
+                    - sqs:DeleteMessage
+                    - sqs:ChangeMessageVisibility
+                    - sqs:GetQueueAttributes
+                  Resource:
+                    - ${self:custom.workQueueArn}
+
+                # Submissions table (own stack — write side)
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:UpdateItem
+                    - dynamodb:Query
+                  Resource:
+                    - ${self:custom.submissionsTableArn}
+                    - Fn::Join:
+                        - '/'
+                        - - ${self:custom.submissionsTableArn}
+                          - index
+                          - '*'
+
+                # Problems table (cross-stack read)
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource:
+                    - ${self:custom.problemsTableArn}
+
+                # EventBridge bus (cross-stack)
+                - Effect: Allow
+                  Action:
+                    - events:PutEvents
+                  Resource:
+                    - ${self:custom.busArn}
+
+                # Failure-log S3 bucket (created in resources.yml)
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:PutObjectAcl
+                  Resource:
+                    - Fn::Sub: ${FailureLogBucket.Arn}/*
+
+  Outputs:
+    ExecutionRoleArn:
+      Value:
+        Fn::GetAtt: [ExecutionRole, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionRoleArn
+
+    TaskRoleArn:
+      Value:
+        Fn::GetAtt: [TaskRole, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TaskRoleArn

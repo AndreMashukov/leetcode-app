@@ -1,0 +1,139 @@
+resources:
+  Resources:
+    # The UserPool. One shared pool across all leetcode BFFs.
+    # - Standard password policy (8+ chars, mixed case, numbers).
+    # - Email as username (no separate username field).
+    # - Self sign-up DISABLED — admin-only user creation. Public
+    #   arbitrary sign-up is a v2 feature.
+    # - MFA optional in dev, optional-but-recommended in prd (we leave
+    #   it optional at the pool level; app-level policy can require
+    #   it later without redeploying auth).
+    # - Auto-verified attribute: email (so a real email address can be
+    #   recovered via the standard verification flow).
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${opt:stage}-user-pool
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        # MFA OFF in v1. Cognito's OPTIONAL mode requires SMS config
+        # (which means an SNS role + verified SES sender), and v1
+        # targets trusted/internal users where app-layer authn is
+        # enough. v1.1 turns this on with a verified SES sender.
+        MfaConfiguration: "OFF"
+        # Password policy: matches AWS console defaults; tightened for
+        # production via stage params or a v1.1 update.
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireUppercase: true
+            RequireNumbers: true
+            RequireSymbols: false
+        Schema:
+          - Name: email
+            AttributeDataType: String
+            Required: true
+            Mutable: true
+          - Name: name
+            AttributeDataType: String
+            Required: false
+            Mutable: true
+        # AdminCreateUser only — no self sign-up.
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: true
+        # Email verification via Cognito's default sender in dev. In
+        # prd, swap to a verified SES sender via the `EmailConfiguration`
+        # block (out of scope for v1).
+        EmailVerificationSubject: "Your leetcode verification code"
+        EmailVerificationMessage: "Your verification code is {####}."
+        # User attribute write restrictions — users can update name
+        # but not email (which would re-trigger verification).
+        UserAttributeUpdateSettings:
+          AttributesRequireVerificationBeforeUpdate:
+            - email
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+        # No Lambda triggers at v1 (post-confirmation, pre-token,
+        # custom-message). Add a post-confirmation trigger in v1.1
+        # to write the new user to a USAGE#<userId> counter table
+        # if we need throttling at the authorizer layer.
+
+    # UserPool client used by the BFFs for JWT validation. The
+    # BFFs' HTTP API JWT authorizers reference this client ID.
+    #
+    # In dev, we enable ALLOW_ADMIN_USER_PASSWORD_AUTH so the e2e
+    # Python driver (../pastebin-app/scripts/e2e-bff-cognito.py)
+    # can mint a JWT via admin_initiate_auth. In prd, REMOVE this
+    # flow — production clients use the Hosted UI / SRP flow only.
+    #
+    # Auth flows: USER_SRP_AUTH (the standard browser flow),
+    #             REFRESH_TOKEN_AUTH (silent refresh),
+    #             ADMIN_USER_PASSWORD_AUTH (dev-only e2e).
+    # No USER_PASSWORD_AUTH — that flow is deprecated.
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-${opt:stage}-bff-client
+        UserPoolId:
+          Ref: UserPool
+        GenerateSecret: false   # public client (JS / mobile)
+        PreventUserExistenceErrors: ENABLED
+        # Token validity: ID + access = 1 hour (matches the harness
+        # template's expiry-indicator behaviour); refresh = 30 days.
+        IdTokenValidity: 1
+        AccessTokenValidity: 1
+        RefreshTokenValidity: 30
+        TokenValidityUnits:
+          IdToken: hours
+          AccessToken: hours
+          RefreshToken: days
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+          # Dev-only: removed in prd via a stage param override
+          # (see serverless/params.yml — currently unconditional).
+          - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        # OAuth / callback URLs not configured at v1 (we use the
+        # admin password flow for dev e2e; production would add the
+        # Hosted UI callback URLs here).
+        SupportedIdentityProviders:
+          - COGNITO
+        AllowedOAuthFlowsUserPoolClient: false
+        ReadAttributes:
+          - email
+          - email_verified
+          - name
+        # No write attributes in v1. Users don't update their profile
+        # via Cognito at MVP; v1.1 adds a /me BFF endpoint that writes
+        # via admin_update_user_attributes. (Cognito rejects writable
+        # attributes that aren't custom OR are reserved like `name`.)
+
+  Outputs:
+    UserPoolId:
+      Value:
+        Ref: UserPool
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolId
+    UserPoolArn:
+      Value:
+        Fn::GetAtt: [UserPool, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolArn
+    UserPoolClientId:
+      Value:
+        Ref: UserPoolClient
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserPoolClientId
+    # Issuer URL is what the BFF HTTP API JWT authorizer uses for
+    # the `issuerUrl` config. Format:
+    #   https://cognito-idp.<region>.amazonaws.com/<userPoolId>
+    IssuerUrl:
+      Value:
+        Fn::Sub: "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+      Export:
+        Name: ${self:service}-${self:provider.stage}-IssuerUrl

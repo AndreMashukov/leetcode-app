@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>smoke · leetcode-status-bff</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --border: #252a35;
+  --text: #e7eaef;
+  --muted: #8b95a7;
+  --accent: #4a9eff;
+  --pass: #2ecc71;
+  --fail: #e74c3c;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 32px;
+  max-width: 960px;
+}
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.controls {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.summary {
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.results { margin-top: 16px; }
+.row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.row.pass { border-left: 3px solid var(--pass); }
+.row.fail { border-left: 3px solid var(--fail); }
+.row .status { font-family: "SF Mono", Menlo, monospace; font-size: 12px; color: var(--muted); }
+.row .body {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.row .label { font-weight: 500; }
+.icon { font-size: 16px; }
+.summary.pass { color: var(--pass); }
+.summary.fail { color: var(--fail); }
+</style>
+</head>
+<body>
+<h1>smoke · leetcode-status-bff</h1>
+<div class="subtitle">Read-only DDB stack — 6 assertions</div>
+
+<div class="controls">
+  <button id="run">Run smoke</button>
+  <span class="subtitle" id="hint" style="margin-left: 12px;">Endpoint: <code>https://mulz4grtp5.execute-api.ap-southeast-1.amazonaws.com</code></span>
+</div>
+
+<div id="summary"></div>
+<div class="results" id="results"></div>
+
+<script>
+const BASE = "https://mulz4grtp5.execute-api.ap-southeast-1.amazonaws.com";
+const REAL_SUB = "01KVWNP51SAVS0NRB3ZXEW8JYE";
+const BOGUS_SUB = "01AAAAAAAAAAAAAAAAAAAAAAAA";
+const BAD_SUB = "bad!chars";
+
+// Baked-in ID tokens (issued from the leetcode-auth dev pool).
+const TOK1 = "eyJraWQiOiJqditNOGpzUElkVFFWK0xzMFluaWovOHhWSkxRM2RXQlN1MWFlOGJZdXpvPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMS5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0xX0JJaEZvQUE4UiIsImNvZ25pdG86dXNlcm5hbWUiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJvcmlnaW5fanRpIjoiMDM2NjVkYjAtNWRmMy00M2ZiLTk5YjctYmU1ODQ2MjY5NmM0IiwiYXVkIjoiMmJwbWk1bXRhYTJlcWRyaWE1ZzFpaDVpcDkiLCJldmVudF9pZCI6IjNlMjkwOTNjLWYyYjktNDc1ZC05ZDQ4LWYxNDM4OGIyYTBlOCIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzgyMzA1NTY2LCJleHAiOjE3ODIzMDkxNjYsImlhdCI6MTc4MjMwNTU2NiwianRpIjoiMGRlZjNhNzUtODFkMC00ZmNmLWFhMDItMGQzMGFjMGFjYzg5IiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSJ9.IDnmCWkWaGiwtwxcXA_-x14mZERuOkBhG7vukYX66UwOXtgp0UR5mdsgpV3eORhXPtmGJoI6GxEFZenasOip4Hnv_RiMNqApzS90pxLwt6SzqXU5aI3mbOXHOE63yvqi00pZ_ZnqrWqECIwyPa9ZPr_mqoeVTrVIxMrQGMdfJwcP8BDgPVEY_EPLcRr7ns45yfODMEviJ9DJY12pnD-FbCcbKudwi8AtBxBu2ATedz76XZziShyURD6TnfvlQR_dhzE0WswUMSgOBwwZ4n4Lik8k2d__zOgKJCybzbcBAD0lwmCtMjLlRKFNCiBfo5JGmOQ60yLfalTvtrEHZJGwMQ";     // admin@example.com (sub 098a55cc-0031-7046-e589-6467e7771c48)
+const TOK2 = "eyJraWQiOiJqditNOGpzUElkVFFWK0xzMFluaWovOHhWSkxRM2RXQlN1MWFlOGJZdXpvPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJjOTVhMjU0Yy1lMGQxLTcwYWUtMzhkZC1hNTIyNGZkNjBkNDQiLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLmFwLXNvdXRoZWFzdC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGhlYXN0LTFfQkloRm9BQThSIiwiY29nbml0bzp1c2VybmFtZSI6ImM5NWEyNTRjLWUwZDEtNzBhZS0zOGRkLWE1MjI0ZmQ2MGQ0NCIsIm9yaWdpbl9qdGkiOiIxM2M3OWUwZi0xN2VkLTRhZmMtYmJmOS0zYzA1NWMxNDJhNGQiLCJhdWQiOiIyYnBtaTVtdGFhMmVxZHJpYTVnMWloNWlwOSIsImV2ZW50X2lkIjoiNTQ4OWE4Y2QtOWQ4MC00OWRmLThlNjktNDJmNjcwZmY2MDRhIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE3ODIzMDU1NTUsImV4cCI6MTc4MjMwOTE1NSwiaWF0IjoxNzgyMzA1NTU1LCJqdGkiOiJjNjVhNGUwOC1lYzlmLTQyNTgtOWE0YS02MWYwZDUxNWQ2YmMiLCJlbWFpbCI6ImFuZHJleV9zbW9rZV91c2VyXzJAZXhhbXBsZS5jb20ifQ.Uslrw1-i4nNZGcbHshMFSZ2syt1yYoCfMwh5wdz-mAca1KbMYNzMvcjoVFmMJqeotN9p0VCawe9NYw7KfnSEJqbS3cylB3CR8oC1xk20a2iMki-CgbYr8uU4ZN97XAbfVGcyVkN-EASvCQWdEiaJFTovhNqyWc69VRepwJ-xuSGw7EGsEInb1S6oHnl7FmsoK1wzy_hyCGRXBfF6HzB-sAz5jqt5-5H446BOSxfDJ585XpmuV_UkNfzYjGEqaAI5vheByDwNdoAXIEvTme1SOkkB6Dl5IIvKcCI1XPR0u3tsFPUDHlQpkjbsr8gOOURSzhX2iiKSPnCGnjN0Gmd41g"; // andrey_smoke_user_2@example.com (sub c95a254c-...)
+
+async function call(path, token) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const resp = await fetch(BASE + path, { headers, method: "GET" });
+  const body = await resp.text();
+  let parsed; try { parsed = JSON.parse(body); } catch { parsed = body; }
+  return { status: resp.status, body: parsed };
+}
+
+const cases = [
+  { name: "GET /health (JWT-protected)",
+    fn: () => call("/health", TOK1),
+    assert: ({status, body}) =>
+      status === 200 && body?.ok === true && body?.service === "leetcode-status-bff" },
+  { name: "GET /health without JWT",
+    fn: () => call("/health"),
+    assert: ({status}) => status === 401 },
+  { name: "GET /submissions/{bogus}/status",
+    fn: () => call(`/submissions/${BOGUS_SUB}/status`, TOK1),
+    assert: ({status, body}) =>
+      status === 404 && body?.error === "not_found" },
+  { name: "GET /submissions/{real}/status (owner)",
+    fn: () => call(`/submissions/${REAL_SUB}/status`, TOK1),
+    assert: ({status, body}) =>
+      status === 200 &&
+      body?.submissionId === REAL_SUB &&
+      body?.status === "PENDING" &&
+      !!body?.submittedAt &&
+      !("resultSummary" in body) },
+  { name: "GET /submissions/{real}/status (other user — must be 404)",
+    fn: () => call(`/submissions/${REAL_SUB}/status`, TOK2),
+    assert: ({status, body}) =>
+      status === 404 && body?.error === "not_found" },
+  { name: "GET /submissions/bad!chars/status",
+    fn: () => call(`/submissions/${BAD_SUB}/status`, TOK1),
+    assert: ({status, body}) =>
+      status === 400 && body?.error === "bad_request" },
+];
+
+const $btn = document.getElementById("run");
+const $results = document.getElementById("results");
+const $summary = document.getElementById("summary");
+
+async function run() {
+  $btn.disabled = true;
+  $results.innerHTML = "";
+  $summary.textContent = "Running…";
+  $summary.className = "summary";
+  let pass = 0, fail = 0;
+  for (const c of cases) {
+    const r = await c.fn();
+    const ok = c.assert(r);
+    if (ok) pass++; else fail++;
+    const row = document.createElement("div");
+    row.className = "row " + (ok ? "pass" : "fail");
+    row.innerHTML = `
+      <div class="icon">${ok ? "✓" : "✗"}</div>
+      <div>
+        <div class="label">${c.name}</div>
+        <div class="body">${JSON.stringify(r.body)}</div>
+      </div>
+      <div class="status">${r.status}</div>`;
+    $results.appendChild(row);
+  }
+  $summary.textContent = `${pass} pass / ${fail} fail`;
+  $summary.className = "summary " + (fail === 0 ? "pass" : "fail");
+  $btn.disabled = false;
+}
+
+$btn.addEventListener("click", run);
+run();
+</script>
+</body>
+</html>

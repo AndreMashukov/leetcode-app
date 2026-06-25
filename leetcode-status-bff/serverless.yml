@@ -1,0 +1,93 @@
+# leetcode-status-bff — Serverless Framework v4
+# Status polling path for the LeetCode service. Read-only on the
+# submissions table; no SQS, no bus subscription at MVP.
+#
+# Architecture (CQRS — this is the *read* side of submissions-bff):
+#   rest — GET /submissions/{submissionId}/status (JWT), GET /health.
+#   listener — none. Workers write the submission row in place;
+#              this stack just polls DDB. (Future: a moderator-bff
+#              could subscribe to SubmissionAccepted events on the
+#              bus, but status-bff is intentionally pull-based
+#              because clients poll at irregular cadence.)
+#
+# Cross-stack refs:
+#   - SubmissionsTableName/Arn from leetcode-submissions-bff.
+#   - UserPoolId, UserPoolClientId from leetcode-auth (JWT only).
+#
+# Deploy order: after leetcode-submissions-bff (depends on its
+# SubmissionsTableName output) and after leetcode-auth (depends on
+# the UserPool).
+#
+# Stack outputs: none — this stack consumes; it does not export.
+
+service: ${self:custom.subsys}-status-bff
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-southeast-1
+  stage: ${opt:stage, 'dev'}
+  endpointType: REGIONAL
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  environment: ${file(serverless/config.yml):environment}
+  iam:
+    role: ${file(serverless/iam.yml):role}
+  httpApi:
+    cors: true
+    metrics: true
+    authorizers:
+      cognitoJwtAuthorizer:
+        type: jwt
+        identitySource: '$request.header.Authorization'
+        issuerUrl:
+          Fn::Sub: 'https://cognito-idp.${AWS::Region}.amazonaws.com/${cf:leetcode-auth-${opt:stage}.UserPoolId}'
+        audience:
+          - ${cf:leetcode-auth-${opt:stage}.UserPoolClientId}
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!.git/**'
+    - '!.env*'
+    - '!*.md'
+    - '!project.json'
+    - '!tsconfig.json'
+    - '!package.json'
+    - '!package-lock.json'
+
+custom: ${file(serverless/config.yml):custom}
+
+functions:
+  health:
+    handler: src/rest/handlers.health
+    description: 'JWT-protected liveness probe.'
+    events:
+      - httpApi:
+          path: /health
+          method: get
+          authorizer:
+            name: cognitoJwtAuthorizer
+    timeout: 5
+    memorySize: 256
+    environment: ${file(serverless/config.yml):environment}
+
+  getStatus:
+    handler: src/rest/handlers.getStatus
+    description: >
+      GET /submissions/{submissionId}/status. Reads the submission row
+      from the cross-stack submissions-table and enforces that the
+      row's userId matches the JWT sub (otherwise 404, to avoid leaking
+      existence of other users' submissions).
+    events:
+      - httpApi:
+          path: /submissions/{submissionId}/status
+          method: get
+          authorizer:
+            name: cognitoJwtAuthorizer
+    timeout: 5
+    memorySize: 256
+    environment: ${file(serverless/config.yml):environment}

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>leetcode-app — Architecture Explainer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #111111;
+      --border: #27272a;
+      --text: #e4e4e7;
+      --muted: #a1a1aa;
+      --primary: #8b5cf6;
+      --server: #22c55e;
+      --client: #3b82f6;
+      --api: #f59e0b;
+      --worker: #f97316;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      background: var(--card);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { color: var(--muted); margin-top: 0.35rem; font-size: 0.95rem; }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem;
+      margin-top: 1rem; font-size: 0.8rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-server { background: var(--server); }
+    .dot-client { background: var(--client); }
+    .dot-api { background: var(--api); }
+    .dot-worker { background: var(--worker); }
+    nav.tabs {
+      display: flex; gap: 0.25rem; padding: 0.75rem 2rem;
+      background: var(--card); border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    nav.tabs .tab {
+      background: transparent; border: 1px solid transparent;
+      color: var(--muted); padding: 0.5rem 1rem; border-radius: 8px;
+      cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    nav.tabs .tab:hover { color: var(--text); }
+    nav.tabs .tab.active {
+      color: var(--primary); border-color: var(--border);
+      background: rgba(139, 92, 246, 0.12);
+    }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
+    .card h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: var(--primary); }
+    .card p, .card li { color: var(--muted); font-size: 0.92rem; }
+    .card ul { padding-left: 1.25rem; margin: 0.5rem 0; }
+    .hero-img {
+      width: 100%; border-radius: var(--radius); border: 1px solid var(--border);
+      margin: 1rem 0 0.5rem;
+    }
+    .caption { font-size: 0.8rem; color: var(--muted); text-align: center; margin-bottom: 1rem; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+    .pill {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .pill-primary { border-color: var(--primary); color: var(--primary); }
+    .flow-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .flow-btn {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 0.45rem 0.85rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+    }
+    .flow-btn.active { border-color: var(--primary); color: var(--primary); background: rgba(139,92,246,0.1); }
+    .flow-detail { display: none; }
+    .flow-detail.active { display: block; }
+    pre.mermaid {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem; overflow-x: auto; margin: 1rem 0;
+    }
+    .stack-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 0.75rem; margin-top: 0.75rem;
+    }
+    .stack-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.85rem;
+    }
+    .stack-card strong { display: block; font-size: 0.88rem; margin-bottom: 0.25rem; }
+    .stack-card span { font-size: 0.78rem; color: var(--muted); }
+    .code-block { margin: 1rem 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .code-file {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #1a1a1a; padding: 0.5rem 0.85rem; font-size: 0.78rem;
+      font-family: ui-monospace, monospace; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .badge {
+      font-size: 0.68rem; font-weight: 600; padding: 0.15rem 0.45rem;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .badge-server { background: rgba(34,197,94,0.15); color: var(--server); }
+    .badge-client { background: rgba(59,130,246,0.15); color: var(--client); }
+    .badge-api { background: rgba(245,158,11,0.15); color: var(--api); }
+    .badge-worker { background: rgba(249,115,22,0.15); color: var(--worker); }
+    .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; font-size: 0.82rem; }
+    .quiz-q { margin-bottom: 1.5rem; }
+    .quiz-q strong { display: block; margin-bottom: 0.6rem; }
+    .quiz-options { display: flex; flex-direction: column; gap: 0.4rem; }
+    .quiz-option {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      padding: 0.55rem 0.75rem; border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--muted);
+    }
+    .quiz-option:hover { border-color: #3f3f46; }
+    .quiz-option.correct { border-color: var(--server); background: rgba(34,197,94,0.08); color: var(--text); }
+    .quiz-option.wrong { border-color: #ef4444; background: rgba(239,68,68,0.08); color: var(--text); }
+    .quiz-feedback { font-size: 0.85rem; margin-top: 0.5rem; color: var(--muted); min-height: 1.2em; }
+    .btn {
+      background: var(--primary); color: #fff; border: none;
+      padding: 0.6rem 1.25rem; border-radius: 8px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .score-box {
+      margin-top: 1rem; padding: 1rem; border: 1px solid var(--primary);
+      border-radius: var(--radius); background: rgba(139,92,246,0.08);
+    }
+    table.routes { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.75rem; }
+    table.routes th, table.routes td {
+      text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border);
+    }
+    table.routes th { color: var(--muted); font-weight: 500; }
+    table.routes code { font-size: 0.8rem; color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>leetcode-app Architecture</h1>
+    <p>AWS serverless coding platform — Lambda BFFs at the edge, Fargate workers for code execution, Cognito JWT on every route.</p>
+    <div class="legend">
+      <span class="legend-item"><span class="dot dot-server"></span> Lambda / Server (BFF)</span>
+      <span class="legend-item"><span class="dot dot-api"></span> API route handler</span>
+      <span class="legend-item"><span class="dot dot-worker"></span> Fargate worker</span>
+      <span class="legend-item"><span class="dot dot-client"></span> Browser client</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-panel="overview">Overview</button>
+    <button class="tab" data-panel="flows">Architecture &amp; Flows</button>
+    <button class="tab" data-panel="code">Code</button>
+    <button class="tab" data-panel="quiz">Quiz</button>
+  </nav>
+
+  <main>
+    <!-- OVERVIEW -->
+    <section id="overview" class="panel active">
+      <div class="card">
+        <h2>What is leetcode-app?</h2>
+        <p>A LeetCode-style coding platform built on the same CQRS patterns as <code>pastebin-app</code> and <code>url-shortener-app</code>. Users browse problems, submit Python or JavaScript solutions, and poll for verdicts — all behind Cognito JWT auth.</p>
+        <div class="pill-row">
+          <span class="pill pill-primary">v1 MVP</span>
+          <span class="pill">Python 3.12 + Node 20</span>
+          <span class="pill">ap-southeast-1</span>
+          <span class="pill">No contests / leaderboard</span>
+          <span class="pill">Inline test cases in DDB</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>System at a glance</h2>
+        <img class="hero-img" src="./images/architecture-overview.png" alt="Architecture overview: Cognito, three Lambda BFFs, DynamoDB, SQS, Fargate workers, EventBridge">
+        <p class="caption">Six CloudFormation stacks on one EventBridge bus. The worker fleet is the only Fargate service.</p>
+      </div>
+
+      <div class="card">
+        <h2>Key design principles</h2>
+        <ul>
+          <li><strong>BFF-per-concern</strong> — problems, submissions, and status are separate Lambda stacks that scale independently.</li>
+          <li><strong>Async submission</strong> — <code>POST /problems/{slug}/submission</code> returns 202 immediately; execution happens on a warm Fargate pool.</li>
+          <li><strong>JWT poll pattern</strong> — the client polls <code>GET /submissions/{id}/status</code> every 1–2s until a terminal status.</li>
+          <li><strong>Conditional DDB transitions</strong> — workers claim rows with <code>PENDING → RUNNING → terminal</code> to prevent double execution.</li>
+          <li><strong>Fargate MVP sandbox</strong> — warm pool (min 10, max 50) for trusted users; full untrusted-code isolation moves to ECS-on-EC2 + gVisor in production.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Compute split</h2>
+        <img class="hero-img" src="./images/compute-split.png" alt="Lambda BFFs vs Fargate workers compute split">
+        <p class="caption">Lambda handles short HTTP requests; Fargate holds a warm container pool for code execution without cold-start penalties.</p>
+      </div>
+
+      <div class="card">
+        <h2>Deployment order</h2>
+        <ol style="padding-left:1.25rem;color:var(--muted);font-size:0.92rem;">
+          <li>leetcode-event-hub</li>
+          <li>leetcode-auth</li>
+          <li>leetcode-problems-bff</li>
+          <li>leetcode-submissions-bff</li>
+          <li>leetcode-status-bff</li>
+          <li>leetcode-worker-images → build &amp; push runner image</li>
+          <li>leetcode-workers</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- FLOWS -->
+    <section id="flows" class="panel">
+      <div class="card">
+        <h2>Interactive flow explorer</h2>
+        <p>Pick a user journey to see the sequence and involved stacks.</p>
+        <div class="flow-picker">
+          <button class="flow-btn active" data-flow="submit">Submit solution</button>
+          <button class="flow-btn" data-flow="poll">Poll status</button>
+          <button class="flow-btn" data-flow="browse">Browse problems</button>
+          <button class="flow-btn" data-flow="worker">Worker execution</button>
+        </div>
+
+        <div id="flow-submit" class="flow-detail active">
+          <img class="hero-img" src="./images/submission-flow.png" alt="Submission flow from POST to poll">
+          <pre class="mermaid">
+sequenceDiagram
+  participant C as Browser
+  participant S as submissions-bff
+  participant D as submissions-table
+  participant Q as work-queue
+  participant W as Fargate worker
+
+  C->>S: POST /problems/{slug}/submission
+  Note over C,S: JWT + { language, code }
+  S->>S: Validate language, code ≤ 64 KiB
+  S->>D: PutItem status=PENDING
+  S->>Q: SendMessage { submissionId, problemId, language }
+  S-->>C: 202 { submissionId, statusUrl, status: PENDING }
+  W->>Q: long-poll ReceiveMessage
+  W->>D: UpdateItem PENDING → RUNNING
+  W->>W: exec python/node runner
+  W->>D: UpdateItem → ACCEPTED | WRONG_ANSWER | ...
+          </pre>
+        </div>
+
+        <div id="flow-poll" class="flow-detail">
+          <pre class="mermaid">
+sequenceDiagram
+  participant C as Browser
+  participant ST as status-bff
+  participant D as submissions-table
+
+  loop every 1–2 seconds until terminal
+    C->>ST: GET /submissions/{id}/status
+    Note over C,ST: JWT required
+    ST->>D: GetItem pk=SUB#{id}
+    ST->>ST: row.userId === jwt.sub (404 on mismatch)
+    ST-->>C: { status, resultSummary, acceptedAt }
+  end
+          </pre>
+          <p><strong>Anti-corruption layer:</strong> status-bff shapes the internal DDB row into the wire format the client polls — ownership checks return 404 (not 403) to prevent submission ID probing.</p>
+        </div>
+
+        <div id="flow-browse" class="flow-detail">
+          <pre class="mermaid">
+flowchart LR
+  C[Browser + JWT] --> P[problems-bff]
+  P --> D[(problems-table)]
+  P -->|GET /problems| L[listProblems Scan]
+  P -->|GET /problems/slug| G[getProblemBySlug]
+  P -->|POST /problems| A[createProblem PutItem]
+          </pre>
+          <p>Test cases and starter code live inline on the problem row — no separate S3 bucket in v1.</p>
+        </div>
+
+        <div id="flow-worker" class="flow-detail">
+          <pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: submissions-bff PutItem
+  PENDING --> RUNNING: worker conditional claim
+  RUNNING --> ACCEPTED: all tests pass
+  RUNNING --> WRONG_ANSWER: test failure
+  RUNNING --> TIMEOUT: exec timeout
+  RUNNING --> RUNTIME_ERROR: unhandled exception
+  RUNNING --> COMPILE_ERROR: syntax error
+  ACCEPTED --> [*]
+  WRONG_ANSWER --> [*]
+  TIMEOUT --> [*]
+  RUNTIME_ERROR --> [*]
+  COMPILE_ERROR --> [*]
+          </pre>
+          <p>Failed runs may upload traces to S3; the status response exposes <code>s3LogKey</code> on terminal failure paths.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Stack map</h2>
+        <div class="stack-grid">
+          <div class="stack-card"><strong>leetcode-event-hub</strong><span>EventBridge bus + archive</span></div>
+          <div class="stack-card"><strong>leetcode-auth</strong><span>Cognito User Pool, shared JWT</span></div>
+          <div class="stack-card"><strong>leetcode-problems-bff</strong><span>Lambda · problems-table owner</span></div>
+          <div class="stack-card"><strong>leetcode-submissions-bff</strong><span>Lambda · SQS enqueue · submissions-table</span></div>
+          <div class="stack-card"><strong>leetcode-status-bff</strong><span>Lambda · read-only status polls</span></div>
+          <div class="stack-card"><strong>leetcode-worker-images</strong><span>ECR repo for combined runner</span></div>
+          <div class="stack-card"><strong>leetcode-workers</strong><span>Fargate · SQS consumer · no HTTP</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>API routes (all JWT-required in v1)</h2>
+        <table class="routes">
+          <thead><tr><th>Stack</th><th>Route</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>problems-bff</td><td><code>GET /problems</code></td><td>List catalog</td></tr>
+            <tr><td>problems-bff</td><td><code>GET /problems/{slug}</code></td><td>Problem detail + examples</td></tr>
+            <tr><td>problems-bff</td><td><code>POST /problems</code></td><td>Author a problem</td></tr>
+            <tr><td>submissions-bff</td><td><code>POST /problems/{slug}/submission</code></td><td>Async submit → 202</td></tr>
+            <tr><td>submissions-bff</td><td><code>GET /me/submissions</code></td><td>User history (no code)</td></tr>
+            <tr><td>status-bff</td><td><code>GET /submissions/{id}/status</code></td><td>Poll verdict</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CODE -->
+    <section id="code" class="panel">
+      <div class="card">
+        <h2>Real source snippets</h2>
+        <p>Copied from the repo — not illustrative pseudocode.</p>
+
+        <h3>Async submission ingest</h3>
+        <div class="code-block">
+          <div class="code-file">
+            <span>leetcode-submissions-bff/src/rest/handlers.ts</span>
+            <span class="badge badge-api">API</span>
+          </div>
+          <pre><code class="language-typescript">export const submitSolution = async (
+  event: APIGatewayProxyEventV2,
+  _ctx: Context,
+): Promise&lt;APIGatewayProxyResultV2&gt; =&gt; {
+  const claims = requireClaims(event);
+  const slug = requireSlug(event);
+  const body = parseJsonBody&lt;{ language?: unknown; code?: unknown }&gt;(event);
+
+  if (!isLanguage(body.language)) {
+    return json(400, {
+      error: "bad_request",
+      message: `field "language" must be one of: python, javascript`,
+    });
+  }
+  // ... validate code ≤ 64 KiB, look up problem via gsi3 ...
+
+  const submissionId = ulid();
+  const submittedAt = new Date().toISOString();
+  const row: SubmissionRow = {
+    pk: `SUB#${submissionId}`,
+    sk: "META",
+    submissionId,
+    userId: claims.sub,
+    problemId: problem.problemId,
+    language: body.language,
+    code: body.code as string,
+    status: "PENDING",
+    submittedAt,
+    gsi1pk: `USER#${claims.sub}`,
+    gsi1sk: submittedAt,
+  };
+
+  await ddb.send(new PutCommand({ TableName: SUBMISSIONS_TABLE, Item: row }));
+
+  await sqs.send(new SendMessageCommand({
+    QueueUrl: WORK_QUEUE_URL,
+    MessageBody: JSON.stringify({
+      submissionId,
+      problemId: problem.problemId,
+      userId: claims.sub,
+      language: body.language,
+      submittedAt,
+    }),
+  }));
+
+  return json(202, {
+    ok: true,
+    submissionId,
+    statusUrl: `/submissions/${submissionId}/status`,
+    status: "PENDING",
+  });
+};</code></pre>
+        </div>
+
+        <h3>Status poll with ownership check</h3>
+        <div class="code-block">
+          <div class="code-file">
+            <span>leetcode-status-bff/src/rest/handlers.ts</span>
+            <span class="badge badge-api">API</span>
+          </div>
+          <pre><code class="language-typescript">export async function getStatus(
+  event: APIGatewayProxyEventV2,
+): Promise&lt;APIGatewayProxyResult&gt; {
+  const submissionId = event.pathParameters?.submissionId;
+  const sub = getRequesterSub(event);
+  if (!sub) {
+    return json(401, { error: "unauthorized", message: "missing sub claim" });
+  }
+
+  const got = await ddb.send(new GetCommand({
+    TableName: SUBMISSIONS_TABLE,
+    Key: { pk: `SUB#${submissionId}`, sk: "META" },
+  }));
+  const row = got.Item as SubmissionRow | undefined;
+  if (!row) {
+    return json(404, { error: "not_found", message: "submission not found" });
+  }
+
+  // 404, not 403 — avoids existence leak when probing other users' IDs
+  if (row.userId !== sub) {
+    return json(404, { error: "not_found", message: "submission not found" });
+  }
+
+  return json(200, rowToResponse(row));
+}</code></pre>
+        </div>
+
+        <h3>Worker claim transition</h3>
+        <div class="code-block">
+          <div class="code-file">
+            <span>leetcode-workers/runs/dispatcher.py</span>
+            <span class="badge badge-worker">Worker</span>
+          </div>
+          <pre><code class="language-python">def _claim_pending(submission_id: str) -&gt; bool:
+    """PENDING -&gt; RUNNING. Returns True on successful claim, False on race."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        ddb.update_item(
+            TableName=SUBMISSIONS_TABLE,
+            Key={"pk": {"S": f"SUB#{submission_id}"}, "sk": {"S": "META"}},
+            UpdateExpression=(
+                "SET #s = :running, startedAt = :now, "
+                "workerId = :wid, gsi2pk = :gsi2pk, gsi2sk = :gsi2sk, "
+                "#a = if_not_exists(#a, :one)"
+            ),
+            ConditionExpression="#s = :pending",
+            ExpressionAttributeNames={"#s": "status", "#a": "attempt"},
+            ExpressionAttributeValues={
+                ":running": {"S": "RUNNING"},
+                ":pending": {"S": "PENDING"},
+                ":now": {"S": now},
+                ":wid": {"S": WORKER_ID},
+                ":gsi2pk": {"S": "STATUS#RUNNING"},
+                ":gsi2sk": {"S": now},
+                ":one": {"N": "1"},
+            },
+        )
+        return True
+    except ddb.exceptions.ConditionalCheckFailedException:
+        return False</code></pre>
+        </div>
+
+        <h3>Problem catalog (authoring)</h3>
+        <div class="code-block">
+          <div class="code-file">
+            <span>leetcode-problems-bff/src/rest/handlers.ts</span>
+            <span class="badge badge-server">Server</span>
+          </div>
+          <pre><code class="language-typescript">const row: ProblemRow = {
+  pk: `PROBLEM#${problemId}`,
+  sk: "META",
+  problemId,
+  slug,
+  authorSub: sub,
+  title,
+  difficulty: difficulty as Difficulty,
+  tags: tags_dedupe,
+  description,
+  examples: parsedExamples,
+  constraints: constraints as string[],
+  createdAt,
+  slugKey: `SLUG#${slug}`,  // GSI3 for cross-stack slug lookup
+};
+
+await ddbDoc.send(new PutCommand({
+  TableName: TABLE_NAME,
+  Item: row,
+  ConditionExpression: "attribute_not_exists(pk)",
+}));</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="quiz" class="panel">
+      <div class="card">
+        <h2>Comprehension check</h2>
+        <p>Test your understanding of leetcode-app's architecture.</p>
+
+        <div class="quiz-q" data-answer="b" data-q="q1">
+          <strong>1. Why is code execution on Fargate instead of Lambda?</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q1" value="a"> Lambda cannot access DynamoDB</label>
+            <label class="quiz-option"><input type="radio" name="q1" value="b"> Warm pool avoids cold starts; long-running sandbox work fits containers better</label>
+            <label class="quiz-option"><input type="radio" name="q1" value="c"> Fargate is always cheaper at any utilization</label>
+            <label class="quiz-option"><input type="radio" name="q1" value="d"> Cognito JWT only works with ECS tasks</label>
+          </div>
+          <div class="quiz-feedback" data-for="q1"></div>
+        </div>
+
+        <div class="quiz-q" data-answer="c" data-q="q2">
+          <strong>2. What HTTP status does submitSolution return on success?</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q2" value="a"> 200 OK with the verdict</label>
+            <label class="quiz-option"><input type="radio" name="q2" value="b"> 201 Created</label>
+            <label class="quiz-option"><input type="radio" name="q2" value="c"> 202 Accepted with submissionId and statusUrl</label>
+            <label class="quiz-option"><input type="radio" name="q2" value="d"> 204 No Content</label>
+          </div>
+          <div class="quiz-feedback" data-for="q2"></div>
+        </div>
+
+        <div class="quiz-q" data-answer="a" data-q="q3">
+          <strong>3. When a user polls another user's submission ID, status-bff returns…</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q3" value="a"> 404 Not Found (same as missing row)</label>
+            <label class="quiz-option"><input type="radio" name="q3" value="b"> 403 Forbidden</label>
+            <label class="quiz-option"><input type="radio" name="q3" value="c"> 200 with redacted fields</label>
+            <label class="quiz-option"><input type="radio" name="q3" value="d"> 401 Unauthorized</label>
+          </div>
+          <div class="quiz-feedback" data-for="q3"></div>
+        </div>
+
+        <div class="quiz-q" data-answer="d" data-q="q4">
+          <strong>4. How does a worker prevent double-execution of the same submission?</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q4" value="a"> FIFO queue with MessageDeduplicationId</label>
+            <label class="quiz-option"><input type="radio" name="q4" value="b"> Delete the SQS message before processing</label>
+            <label class="quiz-option"><input type="radio" name="q4" value="c"> Redis distributed lock</label>
+            <label class="quiz-option"><input type="radio" name="q4" value="d"> Conditional UpdateItem PENDING → RUNNING</label>
+          </div>
+          <div class="quiz-feedback" data-for="q4"></div>
+        </div>
+
+        <div class="quiz-q" data-answer="b" data-q="q5">
+          <strong>5. Where are test cases stored in v1?</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q5" value="a"> S3 bucket per problem</label>
+            <label class="quiz-option"><input type="radio" name="q5" value="b"> Inline on the problem row in DynamoDB</label>
+            <label class="quiz-option"><input type="radio" name="q5" value="c"> Embedded in the SQS message</label>
+            <label class="quiz-option"><input type="radio" name="q5" value="d"> Redis cache warmed at deploy time</label>
+          </div>
+          <div class="quiz-feedback" data-for="q5"></div>
+        </div>
+
+        <div class="quiz-q" data-answer="c" data-q="q6">
+          <strong>6. Which stacks must deploy before leetcode-workers?</strong>
+          <div class="quiz-options">
+            <label class="quiz-option"><input type="radio" name="q6" value="a"> Only leetcode-auth</label>
+            <label class="quiz-option"><input type="radio" name="q6" value="b"> problems-bff and status-bff only</label>
+            <label class="quiz-option"><input type="radio" name="q6" value="c"> submissions-bff (queue + table), worker-images (ECR), plus auth/event-hub</label>
+            <label class="quiz-option"><input type="radio" name="q6" value="d"> No dependencies — workers deploy first</label>
+          </div>
+          <div class="quiz-feedback" data-for="q6"></div>
+        </div>
+
+        <button class="btn" id="grade-quiz">Check answers</button>
+        <div class="score-box" id="quiz-score" hidden></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/languages/typescript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/languages/python.min.js"></script>
+  <script>
+    // Tabs
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.panel).classList.add('active');
+      });
+    });
+
+    // Flow picker
+    document.querySelectorAll('.flow-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.flow-detail').forEach(d => d.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('flow-' + btn.dataset.flow).classList.add('active');
+      });
+    });
+
+    // Quiz
+    const explanations = {
+      q1: {
+        a: 'Lambda can access DynamoDB — that is not the reason for Fargate.',
+        b: 'Correct. The design doc and README call out cold-start latency and the need for a warm container pool with long-running sandbox work.',
+        c: 'Fargate costs more at low utilization; Lambda wins on cost only when utilization is very low.',
+        d: 'JWT auth is handled at the API Gateway layer on Lambda BFFs, not tied to ECS.'
+      },
+      q2: {
+        a: 'The verdict is not ready synchronously — execution is async.',
+        b: '201 is used for problem creation, not submission.',
+        c: 'Correct. submitSolution returns 202 with submissionId, statusUrl, and status PENDING.',
+        d: '204 would give the client no submissionId to poll with.'
+      },
+      q3: {
+        a: 'Correct. Returning 404 for both missing and unauthorized rows prevents probing for valid submission IDs.',
+        b: '403 would confirm the row exists, leaking information.',
+        c: 'The handler does not return partial data for other users\' rows.',
+        d: '401 is for missing JWT; ownership mismatch is handled after auth.'
+      },
+      q4: {
+        a: 'The work queue is a standard SQS queue — no FIFO deduplication.',
+        b: 'Deleting before processing would lose the message on crash.',
+        c: 'No Redis in v1 architecture.',
+        d: 'Correct. _claim_pending uses ConditionExpression status = PENDING before running code.'
+      },
+      q5: {
+        a: 'v1 explicitly stores test cases inline in DDB, not S3.',
+        b: 'Correct. The problem row includes testCases inline per design-research.md.',
+        c: 'SQS carries routing fields (submissionId, problemId, language) — workers fetch test cases from DDB.',
+        d: 'No Redis in v1.'
+      },
+      q6: {
+        a: 'Workers need the SQS queue, submissions table, problems table, and a pushed ECR image.',
+        b: 'status-bff is not a worker dependency; submissions-bff owns the queue.',
+        c: 'Correct. Workers import queue/table ARNs from submissions-bff and the runner image from worker-images.',
+        d: 'Workers depend on submissions-bff outputs and a pushed container image.'
+      }
+    };
+
+    document.getElementById('grade-quiz').addEventListener('click', () => {
+      let score = 0;
+      const total = document.querySelectorAll('.quiz-q').length;
+      document.querySelectorAll('.quiz-q').forEach(q => {
+        const qid = q.dataset.q;
+        const answer = q.dataset.answer;
+        const selected = q.querySelector(`input[name="${qid}"]:checked`);
+        const fb = q.querySelector(`.quiz-feedback[data-for="${qid}"]`);
+        q.querySelectorAll('.quiz-option').forEach(o => o.classList.remove('correct', 'wrong'));
+        if (!selected) {
+          fb.textContent = 'Pick an answer.';
+          return;
+        }
+        const val = selected.value;
+        if (val === answer) {
+          score++;
+          selected.closest('.quiz-option').classList.add('correct');
+          fb.textContent = explanations[qid][val];
+        } else {
+          selected.closest('.quiz-option').classList.add('wrong');
+          q.querySelector(`input[value="${answer}"]`).closest('.quiz-option').classList.add('correct');
+          fb.textContent = explanations[qid][val];
+        }
+      });
+      const box = document.getElementById('quiz-score');
+      box.hidden = false;
+      box.textContent = `Score: ${score} / ${total}`;
+    });
+
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+    hljs.configure({ ignoreUnescapedHTML: true });
+    hljs.highlightAll();
+  </script>
+</body>
+</html>

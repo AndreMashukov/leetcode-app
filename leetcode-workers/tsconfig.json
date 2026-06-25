@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./",
+    "noEmit": true
+  },
+  "include": ["serverless/**/*.yml", "serverless.yml"],
+  "exclude": ["runs/**", "tests/**", "buildspec.yml"]
+}

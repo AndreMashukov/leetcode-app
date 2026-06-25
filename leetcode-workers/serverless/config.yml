@@ -1,0 +1,62 @@
+# leetcode-workers/serverless/config.yml
+# Stage-keyed params + custom values.
+
+params:
+  default:
+    logRetentionInDays: 3
+  prd:
+    logRetentionInDays: 30
+
+custom:
+  partition: aws
+  org: mashukov
+  subsys: leetcode
+
+  # Cross-stack refs. Each has a fallback so `sls package` works
+  # before all upstream stacks are deployed; at deploy time
+  # Serverless re-resolves and errors loudly if any are missing.
+  #
+  # Naming follows the upstream exports (see AGENTS.md):
+  # - worker-images: EcrRepoUri
+  # - submissions-bff: WorkQueueUrl, WorkQueueArn, SubmissionsTableName,
+  #                    SubmissionsTableArn
+  # - problems-bff:   ProblemsTableName, ProblemsTableArn
+  # - event-hub:      busArn
+  workQueueUrl: ${cf:leetcode-submissions-bff-${opt:stage}.WorkQueueUrl, ''}
+  workQueueArn: ${cf:leetcode-submissions-bff-${opt:stage}.WorkQueueArn, 'arn:aws:sqs:ap-southeast-1:000000000000:placeholder'}
+  submissionsTableName: ${cf:leetcode-submissions-bff-${opt:stage}.SubmissionsTableName, 'leetcode-submissions-bff-${opt:stage}-submissions'}
+  submissionsTableArn: ${cf:leetcode-submissions-bff-${opt:stage}.SubmissionsTableArn, 'arn:aws:dynamodb:ap-southeast-1:000000000000:table/placeholder'}
+  problemsTableName: ${cf:leetcode-problems-bff-${opt:stage}.ProblemsTableName, 'leetcode-problems-bff-${opt:stage}-problems'}
+  problemsTableArn: ${cf:leetcode-problems-bff-${opt:stage}.ProblemsTableArn, 'arn:aws:dynamodb:ap-southeast-1:000000000000:table/placeholder'}
+  busArn: ${cf:leetcode-event-hub-${opt:stage}.busArn, 'arn:aws:events:ap-southeast-1:000000000000:event-bus/placeholder'}
+  busName: ${cf:leetcode-event-hub-${opt:stage}.busName, 'leetcode-event-hub-${opt:stage}-bus'}
+  ecrRepoUri: ${cf:leetcode-worker-images-${opt:stage}.EcrRepoUri, ''}
+
+  # The image tag the task pulls. `cb-build-runners.sh` now
+  # tags every build with a fresh `dev-XXXXXXXXXX` so ECR's
+  # tag immutability doesn't bite. To roll forward:
+  #   1. bash scripts/cb-build-runners.sh           # new tag, push to ECR
+  #   2. yarn deploy:workers                        # picks up new workerImageTag
+  # Same tag, different code, would mean a force-redeploy of the
+  # task definition (sls deploy function).
+  workerImageTag: ${opt:workerImageTag, 'dev-4407f4cf8f'}
+
+  # Use the default VPC for Fargate. All subnets are public and
+  # mapPublicIpOnLaunch=true — no NAT required, tasks get public IPs
+  # via the IGW. v1 MVP; tighten to private subnets + NAT GW later.
+  defaultVpcId: vpc-0a17cc97d2e0e43cb
+  publicSubnetIds:
+    - subnet-0a896370c15814b45   # ap-southeast-1a
+    - subnet-02a0c6838d83aad0f   # ap-southeast-1b
+    - subnet-0cc63ba5fc3596f38   # ap-southeast-1c
+
+environment:
+  SERVICE: ${self:service}
+  STAGE: ${opt:stage}
+
+workerEnvironment:
+  WORK_QUEUE_URL: ${self:custom.workQueueUrl}
+  SUBMISSIONS_TABLE_NAME: ${self:custom.submissionsTableName}
+  PROBLEMS_TABLE_NAME: ${self:custom.problemsTableName}
+  EVENT_BUS_NAME: ${self:custom.busName}
+  AWS_REGION: ap-southeast-1

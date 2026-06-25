@@ -1,0 +1,19 @@
+{
+  "name": "leetcode-worker-images",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECR repository for the leetcode combined Python 3.12 + Node 20 worker image. Built and pushed by scripts/build-runners.sh.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "package": "serverless package",
+    "deploy": "serverless deploy",
+    "info": "serverless info",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f"
+  },
+  "devDependencies": {
+    "serverless": "^4.0.0"
+  }
+}

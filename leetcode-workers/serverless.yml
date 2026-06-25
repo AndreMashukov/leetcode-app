@@ -1,0 +1,62 @@
+# leetcode-workers — Serverless Framework v4
+#
+# Fargate workers that consume from the work queue and run user code.
+# One image (Python + Node) dispatched by the `language` field.
+#
+# Architecture (design §10.4):
+#   1 combined ECR image  ←  leetcode-worker-images stack
+#   1 ECS cluster
+#   1 ECS task definition (1 vCPU / 2 GB)
+#   1 ECS Fargate service (DesiredCount=1)
+#   1 SQS long-poll loop inside the dispatcher (no AWS::SQS::EventSourceMapping —
+#     those are Lambda-only)
+#   1 failure-log S3 bucket (compile/runtime traceback blobs)
+#   2 IAM roles: execution (image pull + CW logs) and task (SQS+DDB+events+S3)
+#
+# The worker is a long-running task; no Lambda functions. Serverless v4
+# happily deploys resources-only stacks; `service:` is set for naming.
+#
+# Cross-stack refs:
+#   - EcrRepoUri from leetcode-worker-images
+#   - WorkQueueUrl/Arn from leetcode-submissions-bff
+#   - SubmissionsTableName/Arn from leetcode-submissions-bff
+#   - ProblemsTableName/Arn from leetcode-problems-bff
+#   - busArn from leetcode-event-hub
+#
+# Deploy order:
+#   1. leetcode-event-hub
+#   2. leetcode-auth
+#   3. leetcode-problems-bff
+#   4. leetcode-submissions-bff
+#   5. leetcode-status-bff
+#   6. leetcode-worker-images
+#   7. (build + push runner image — scripts/cb-build-runners.sh)
+#   8. leetcode-workers   ← this stack
+
+service: ${self:custom.subsys}-workers
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  region: ap-southeast-1
+  stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  stackTags: ${file(serverless/tags.yml):stackTags}
+
+custom: ${file(serverless/config.yml):custom}
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!tests/**'
+    - '!buildspec.yml'
+    - '!runs/__pycache__/**'
+    - '!.git/**'
+
+resources:
+  - ${file(serverless/cluster.yml):resources}
+  - ${file(serverless/iam.yml):resources}
+  - ${file(serverless/resources.yml):resources}
+  - ${file(serverless/service.yml):resources}

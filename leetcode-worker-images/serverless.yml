@@ -1,0 +1,47 @@
+# leetcode-worker-images
+#
+# Owns the combined Python 3.12 + Node 20 ECR repository used by the
+# leetcode-workers Fargate service. v1 ships a single image that has
+# both runtimes installed; the Fargate task selects `python` vs `node`
+# via the `language` field on the SQS message.
+#
+# Why a separate stack (and not embedded in leetcode-workers)?
+# - leetcode-workers is redeployed whenever the runner code changes
+#   (subprocess invocation, sandbox setrlimit, timeout handling). It
+#   is NOT redeployed when the image build script changes (the image
+#   is built + pushed by scripts/build-runners.sh, then the Fargate
+#   task definition is force-redeployed by SSM / a separate runner).
+# - The ECR repo is a low-rate-change, system-wide resource — same
+#   architectural tier as the event bus and the Cognito pool.
+# - Fargate's task definition references the image URI via env var;
+#   that URI lives in this stack's output.
+#
+# Resources:
+#   - 1 AWS::ECR::Repository (combined Python+Node)
+#   - 1 AWS::IAM::Role + policy granting ecr:GetDownloadUrlForLayer,
+#     ecr:BatchGetImage, ecr:GetAuthorizationToken to Fargate tasks
+#     that consume from this repo (the role itself lives in
+#     leetcode-workers; the policy here grants the cross-account
+#     permissions for the Fargate execution/task role to assume).
+#
+# Cross-stack consumers reference it via:
+#   ${cf:leetcode-worker-images-${opt:stage}.EcrRepoUri}
+
+service: ${self:custom.subsys}-${self:custom.role}
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-1'}
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  stackTags: ${file(serverless/tags.yml)}
+
+custom: ${file(serverless/config.yml):custom}
+
+resources:
+  - ${file(serverless/ecr.yml):resources}
+
+# No functions, no events. ECR is pure infrastructure (one repo +
+# one IAM policy granting Fargate pull access).

@@ -1,0 +1,46 @@
+version: 0.2
+
+# buildspec for leetcode-worker-images.
+#
+# Invoked by `scripts/build-runners.sh` (via `aws codebuild
+# start-build`) and by CI. CodeBuild's docker-flavor runtime
+# (IMAGE=aws/codebuild/standard:7.0) gives us a pre-installed
+# docker daemon and a fresh container, so we don't have to
+# manage one in the local sandbox.
+
+env:
+  variables:
+    REPO_NAME: "leetcode-worker-images-dev-worker-images"
+    AWS_REGION: "ap-southeast-1"
+    ECR_URI: "579273601730.dkr.ecr.ap-southeast-1.amazonaws.com"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "[build] in CodeBuild $(id)"
+  pre_build:
+    commands:
+      - echo "[build] logging into ECR $ECR_URI"
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_URI"
+  build:
+    commands:
+      - echo "[build] building image :$TAG"
+      # The Dockerfile lives in `runs/` and `COPY`s files relative
+      # to that directory, so the build context IS `runs/`. The
+      # spec lives at the project root because CodeBuild expects
+      # `buildspec.yml` there.
+      - docker build --tag "$ECR_URI/$REPO_NAME:$TAG" --file runs/Dockerfile runs/
+  post_build:
+    commands:
+      - echo "[build] pushing image"
+      - docker push "$ECR_URI/$REPO_NAME:$TAG"
+      # If we just built a non-stage tag, re-tag the stage-latest.
+      - '[[ "$TAG" != "dev-latest" ]] && docker tag "$ECR_URI/$REPO_NAME:$TAG" "$ECR_URI/$REPO_NAME:dev-latest" && docker push "$ECR_URI/$REPO_NAME:dev-latest" || true'
+
+artifacts:
+  files:
+    - '**/*'
+  name: leetcode-worker-images-build-$(date +%s)
+  discard-paths: yes

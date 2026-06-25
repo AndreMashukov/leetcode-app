@@ -1,0 +1,7 @@
+role:
+  statements:
+    # Cross-stack DDB read on leetcode-submissions-bff's table ONLY.
+    # ProjectionExpression in the handler is limited to the columns
+    # we return to the client — we have full row access at IAM level
+    # because we still need `userId` for the ownership check.
+    - ${file(serverless/cross-stack-reads.yml):iamRoleStatements}

@@ -1,0 +1,52 @@
+# leetcode-workers/serverless/resources.yml
+#
+# S3 bucket for failure logs (compile errors, runtime errors, timeouts).
+# The dispatcher uploads a small text file per failed submission so
+# status-bff clients can fetch the traceback without bloating the
+# DDB row.
+#
+# Bucket policy: nothing custom. Default ACL = private; the dispatcher's
+# task role grants PutObject only on ${Bucket.Arn}/*. Public access
+# block is on (default). Lifecycle: expire objects at 7 days —
+# failure traces are useful for debugging but not durable.
+
+resources:
+  Resources:
+    FailureLogBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        BucketName: ${self:service}-${opt:stage}-failure-logs
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: BucketOwnerEnforced
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+        LifecycleConfiguration:
+          Rules:
+            - Id: expire-failure-logs
+              Status: Enabled
+              ExpirationInDays: 7
+              NoncurrentVersionExpirationInDays: 1
+              AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 1
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${opt:stage}-failure-logs
+
+  Outputs:
+    FailureLogBucketName:
+      Value:
+        Ref: FailureLogBucket
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FailureLogBucketName
+
+    FailureLogBucketArn:
+      Value:
+        Fn::GetAtt: [FailureLogBucket, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FailureLogBucketArn

@@ -1,0 +1,86 @@
+resources:
+  Resources:
+    # --- DDB problems table (Single-Table Design) ---
+    # pk = "PROBLEM#<problemId>" (HASH), sk = "META" (RANGE)
+    # GSI1 enables GET /me/problems: authorSub (HASH) + gsisk (RANGE)
+    # GSI2 enables GET /problems (paginated) and tag filtering:
+    #   tagSlug (HASH) + gsisk (RANGE) -- sparse (only when tags set)
+    # DDB stream (NEW_AND_OLD_IMAGES) feeds the trigger lambda.
+    ProblemsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        TableName: ${self:service}-${opt:stage}-problems
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: authorSub
+            AttributeType: S
+          - AttributeName: gsisk
+            AttributeType: S
+          - AttributeName: tagSlug
+            AttributeType: S
+          - AttributeName: tagGsisk
+            AttributeType: S
+          # slug lookup key — submissions-bff reads this GSI.
+          - AttributeName: slugKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: gsi1
+            KeySchema:
+              - AttributeName: authorSub
+                KeyType: HASH
+              - AttributeName: gsisk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: gsi2
+            KeySchema:
+              - AttributeName: tagSlug
+                KeyType: HASH
+              - AttributeName: tagGsisk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          # gsi3 = slug lookup for cross-stack callers (submissions-bff).
+          # The public URL is /problems/{slug}/submission — the BFF
+          # needs to resolve slug → problemId before enqueuing. Sparse:
+          # every problem has exactly one slug row, so no fan-out cost.
+          # Added 2026-06-24 when submissions-bff deployed and hit
+          # "Query condition missed key schema element: authorSub".
+          #
+          # KEYS_ONLY projection (DDB doesn't allow in-place projection
+          # changes — must delete + recreate the GSI to switch).
+          - IndexName: gsi3
+            KeySchema:
+              - AttributeName: slugKey
+                KeyType: HASH
+            Projection:
+              ProjectionType: KEYS_ONLY
+        BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+  Outputs:
+    ProblemsTableName:
+      Value:
+        Ref: ProblemsTable
+    ProblemsTableArn:
+      Value:
+        Fn::GetAtt: [ProblemsTable, Arn]
+    ProblemsTableStreamArn:
+      Value:
+        Fn::GetAtt: [ProblemsTable, StreamArn]
+    ApiEndpoint:
+      Value:
+        Fn::Sub: 'https://${HttpApi}.execute-api.${opt:region}.amazonaws.com'

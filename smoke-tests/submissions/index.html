@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>smoke · leetcode-submissions-bff</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --border: #252a35;
+  --text: #e7eaf0;
+  --muted: #8a93a3;
+  --pass: #34d399;
+  --fail: #f87171;
+  --skip: #fbbf24;
+  --accent: #60a5fa;
+  --code: #1a1f2c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 24px;
+  line-height: 1.5;
+}
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.verdict {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.verdict.allpass { background: var(--pass); color: #06231a; }
+.verdict.anyfail { background: var(--fail); color: #2a0a0a; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  border-left-width: 4px;
+}
+.card.pass { border-left-color: var(--pass); }
+.card.fail { border-left-color: var(--fail); }
+.card.skip { border-left-color: var(--skip); }
+.row1 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.title { font-weight: 600; font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-size: 14px; }
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge.pass { background: rgba(52,211,153,0.15); color: var(--pass); }
+.badge.fail { background: rgba(248,113,113,0.15); color: var(--fail); }
+.badge.skip { background: rgba(251,191,36,0.15); color: var(--skip); }
+.latency { color: var(--muted); font-size: 12px; margin-left: auto; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; margin-top: 8px; font-size: 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+code, pre { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-size: 12px; }
+pre {
+  background: var(--code);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e1;
+}
+.controls { margin-bottom: 16px; display: flex; gap: 8px; }
+button {
+  background: var(--accent);
+  color: #0a1426;
+  border: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: wait; }
+</style>
+</head>
+<body>
+  <h1>smoke · leetcode-submissions-bff</h1>
+  <div class="sub">9 assertions · runs in your browser · real HTTP to the deployed API</div>
+
+  <div class="controls">
+    <button id="run">Run smoke</button>
+  </div>
+
+  <div id="verdict" class="verdict allpass">awaiting run…</div>
+  <div id="results"></div>
+
+<script>
+const BASE = "https://yffu5ff2t3.execute-api.ap-southeast-1.amazonaws.com";
+const TOK = "eyJraWQiOiJqditNOGpzUElkVFFWK0xzMFluaWovOHhWSkxRM2RXQlN1MWFlOGJZdXpvPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMS5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0xX0JJaEZvQUE4UiIsImNvZ25pdG86dXNlcm5hbWUiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJvcmlnaW5fanRpIjoiZmNmMzYzNDItZGZhZS00YjU2LTg2NGItYTgzMTZmOGI0ZjgxIiwiYXVkIjoiMmJwbWk1bXRhYTJlcWRyaWE1ZzFpaDVpcDkiLCJldmVudF9pZCI6IjliMTM2MGNhLWZhN2QtNDZmNC1iMzI1LWRiOGJhYmI0NjNhMiIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzgyMjk3MDI3LCJleHAiOjE3ODIzMDA2MjcsImlhdCI6MTc4MjI5NzAyNywianRpIjoiZDExYWVlNTAtMmUwMC00MTI1LTgzYTItZTI1NWQyMmIxYWVlIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSJ9.3X4F7m3xl62UmWxfmw1bKsdVObMR-yZ8dO286SpGIBWgNm3j5WvGPMeDFC1uCSOHRYdlOV_d22F6GcGeuI1juNr0klaAakfIVTSZ9bGsGDYTA3JBZQGrRLLrEySypcpUqym5DGtPovx_s2mAeauGd77-MbEigAk4cRGeAIcckATUVjhNEtBftdJJTZdUdmBsAdgYo07qBqeIEdlFV-IhxzTgvX-CBBb-3gtBRf3CMoTyV9zRNPpohhUwJungHLeg5MGN8yEMNTvpgLvLer9fxGwob49FYNQB-yofkG57-wvLphhbI9S6D7OmuxnOha6JYV4AL4AZzJVLe-Sbl-FE3w";
+const TWO_SUM_CODE = "def two_sum(nums, target):\\n    seen = {}\\n    for i, n in enumerate(nums):\\n        if target - n in seen:\\n            return [seen[target - n], i]\\n        seen[n] = i\\n    return []\\n";
+
+const TESTS = [
+  {
+    name: "GET /health (JWT-protected)",
+    method: "GET", path: "/health",
+    auth: true,
+    want: 200,
+  },
+  {
+    name: "POST /problems/{slug}/submission without JWT",
+    method: "POST", path: "/problems/two-sum/submission",
+    auth: false,
+    body: { language: "python", code: "x" },
+    want: 401,
+  },
+  {
+    name: "POST with language='ruby' (rejected)",
+    method: "POST", path: "/problems/two-sum/submission",
+    auth: true,
+    body: { language: "ruby", code: "x" },
+    want: 400,
+    bodyShape: { hasError: "bad_request" },
+  },
+  {
+    name: "POST with 65 KiB code (size limit)",
+    method: "POST", path: "/problems/two-sum/submission",
+    auth: true,
+    body: { language: "python", code: "x".repeat(65 * 1024) },
+    want: 413,
+    bodyShape: { hasError: "code_too_large" },
+  },
+  {
+    name: "POST to bogus slug (404)",
+    method: "POST", path: "/problems/no-such-slug-xyzzy/submission",
+    auth: true,
+    body: { language: "python", code: "print(1)" },
+    want: 404,
+    bodyShape: { hasError: "not_found" },
+  },
+  {
+    name: "POST /problems/two-sum/submission (valid round-trip)",
+    method: "POST", path: "/problems/two-sum/submission",
+    auth: true,
+    body: { language: "python", code: TWO_SUM_CODE },
+    want: 202,
+    bodyShape: { status: "PENDING", hasField: "submissionId", hasField: "statusUrl" },
+  },
+  {
+    name: "GET /me/submissions",
+    method: "GET", path: "/me/submissions",
+    auth: true,
+    want: 200,
+    bodyShape: { hasField: "items" },
+  },
+  {
+    name: "GET /me/submissions does NOT leak code field",
+    method: "GET", path: "/me/submissions",
+    auth: true,
+    want: 200,
+    bodyShape: { noLeak: true },
+  },
+  {
+    name: "GET /me/submissions has authorSub metadata",
+    method: "GET", path: "/me/submissions",
+    auth: true,
+    want: 200,
+    bodyShape: { fieldMatches: { problemDifficulty: "easy" } },
+  },
+];
+
+async function call(method, path, body, auth) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth) headers["Authorization"] = "Bearer " + TOK;
+  const t0 = performance.now();
+  const r = await fetch(BASE + path, {
+    method, headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await r.text();
+  const ms = Math.round(performance.now() - t0);
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch (_) {}
+  return { status: r.status, body: text, parsed, ms };
+}
+
+function checkShape(parsed, shape) {
+  if (!parsed) return false;
+  if (shape.hasError && parsed.error !== shape.hasError) return false;
+  if (shape.status && parsed.status !== shape.status) return false;
+  if (shape.hasField && !(shape.hasField in parsed)) return false;
+  if (shape.fieldMatches) {
+    for (const [k, v] of Object.entries(shape.fieldMatches)) {
+      if (parsed.items && Array.isArray(parsed.items) && parsed.items[0]) {
+        if (parsed.items[0][k] !== v) return false;
+      }
+    }
+  }
+  if (shape.noLeak && parsed.items && Array.isArray(parsed.items)) {
+    for (const it of parsed.items) {
+      if ("code" in it && it.code && it.code.length > 100) return false;
+    }
+  }
+  return true;
+}
+
+function renderCard(t, status, ms, body, parsed, ok) {
+  const cls = ok ? "pass" : "fail";
+  const icon = ok ? "PASS" : "FAIL";
+  const shapeOk = t.bodyShape ? checkShape(parsed, t.bodyShape) : true;
+  const finalOk = ok && shapeOk;
+  const finalCls = finalOk ? "pass" : "fail";
+  const finalIcon = finalOk ? "PASS" : "FAIL";
+  return `<div class="card ${finalCls}">
+    <div class="row1">
+      <span class="badge ${finalCls}">${finalIcon}</span>
+      <span class="title">${t.method} ${t.path}</span>
+      <span style="color:var(--muted);font-size:13px;">${t.name}</span>
+      <span class="latency">${ms} ms · got ${status} (want ${t.want})${t.bodyShape ? ' · shape ' + (shapeOk ? '✓' : '✗') : ''}</span>
+    </div>
+    <pre>${body.slice(0, 400).replace(/[<&>]/g, c => ({'<':'&lt;','&':'&amp;','>':'&gt;'}[c]))}${body.length > 400 ? '…' : ''}</pre>
+  </div>`;
+}
+
+async function run() {
+  const btn = document.getElementById("run");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  let pass = 0, fail = 0;
+  let html = "";
+  for (const t of TESTS) {
+    let r;
+    try {
+      r = await call(t.method, t.path, t.body, t.auth);
+    } catch (e) {
+      r = { status: 0, body: "fetch failed: " + e.message, parsed: null, ms: 0 };
+    }
+    const ok = r.status === t.want;
+    if (ok) pass++; else fail++;
+    html += renderCard(t, r.status, r.ms, r.body, r.parsed, ok);
+  }
+  document.getElementById("results").innerHTML = html;
+  const v = document.getElementById("verdict");
+  v.textContent = `${pass}/${pass+fail} pass` + (fail ? ` · ${fail} fail` : '');
+  v.className = "verdict " + (fail ? "anyfail" : "allpass");
+  btn.disabled = false;
+  btn.textContent = "Run smoke";
+}
+
+document.getElementById("run").addEventListener("click", run);
+run();
+</script>
+</body>
+</html>

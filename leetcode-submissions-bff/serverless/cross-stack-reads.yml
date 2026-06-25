@@ -1,0 +1,23 @@
+# Cross-stack read on leetcode-problems-bff's ProblemsTable.
+#
+# At submit time we look up the problem by slug (the public URL
+# path) to resolve its problemId + authorSub before we enqueue.
+# The problemId is what workers fetch by (slug is human-facing,
+# problemId is the durable row key).
+#
+# Resource ARN is the imported value at config.yml:custom.problemsTableArn.
+# At package-time the fallback lets `sls package` work before
+# problems-bff is deployed; at deploy-time Serverless re-resolves
+# against the live CFN stack.
+iamRoleStatements:
+  Effect: Allow
+  Action:
+    - dynamodb:GetItem
+    - dynamodb:Query
+  Resource:
+    - ${self:custom.problemsTableArn}
+    - Fn::Join:
+        - '/'
+        - - ${self:custom.problemsTableArn}
+          - index
+          - '*'

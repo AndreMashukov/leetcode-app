@@ -1,0 +1,25 @@
+{
+  "name": "leetcode-problems-bff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LeetCode-style authoring + read API for problems. Writes to the problems table; emits ProblemCreated / ProblemDeleted on the bus via the DDB stream trigger.",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "serverless package --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+    "deploy": "serverless deploy --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+    "info": "serverless info --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.12.7",
+    "esbuild": "^0.21.5",
+    "serverless": "^4.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-eventbridge": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/util-dynamodb": "^3.600.0"
+  }
+}

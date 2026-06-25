@@ -1,0 +1,45 @@
+{
+  "name": "leetcode-workers",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "leetcode-workers/serverless",
+  "projectType": "application",
+  "tags": ["type:app", "scope:leetcode", "role:workers"],
+  "implicitDependencies": ["leetcode-worker-images", "leetcode-submissions-bff", "leetcode-problems-bff", "leetcode-event-hub"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'no TS — python workers; typecheck is N/A'",
+        "cwd": "leetcode-workers"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "python3 tests/test_dispatcher_logic.py",
+        "cwd": "leetcode-workers"
+      }
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless package --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-workers"
+      }
+    },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless deploy --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-workers"
+      }
+    },
+    "info": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "serverless info --stage ${NX_STAGE:-dev} --region ${NX_REGION:-ap-southeast-1}",
+        "cwd": "leetcode-workers"
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+# leetcode-workers/serverless/service.yml
+#
+# The Fargate task + service. Mirrors the §10.4 design:
+# - Single combined image (Python + Node) — dispatch by `language` field
+# - 1 vCPU / 2 GB mem task size — headroom for Python runner heap
+#   (inner setrlimit is NO-OP at v1; Fargate task limit IS the
+#   outer sandbox — see design §5)
+# - Public subnets (no NAT), tasks get public IPs
+# - SQS event source mapping via the AWS::ApplicationAutoScaling::ScalableTarget
+#   trick + AWS::ECS::Service .Events isn't supported in CFN, so we
+#   declare an EventSourceMapping manually and use it as the
+#   service's `scalingTriggers` source. Serverless v4 understands this.
+#
+# Container override: command = ["python3", "/opt/runners/dispatcher.py"],
+# cwd = /opt/runners. The image's ENTRYPOINT is already
+# ["python3", "/opt/runners/dispatcher.py"] so we leave command empty
+# and just provide the env.
+
+resources:
+  Resources:
+    WorkerTaskDefinition:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        Family: ${self:service}-${opt:stage}
+        Cpu: '1024'                # 1 vCPU — Fargate minimum that allows 2GB mem
+        Memory: '2048'             # 2 GB — fits Python + Node + DDB boto3 + SQS long-poll buffers
+        NetworkMode: awsvpc
+        RequiresCompatibilities:
+          - FARGATE
+        ExecutionRoleArn:
+          Fn::GetAtt: [ExecutionRole, Arn]
+        TaskRoleArn:
+          Fn::GetAtt: [TaskRole, Arn]
+        RuntimePlatform:
+          CpuArchitecture: X86_64
+          OperatingSystemFamily: LINUX
+        ContainerDefinitions:
+          - Name: worker
+            Image: ${self:custom.ecrRepoUri}:${self:custom.workerImageTag}
+            Essential: true
+            WorkingDirectory: /opt/runners
+            # The image's ENTRYPOINT already runs dispatcher.py; no command override.
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: /aws/ecs/${self:service}-${opt:stage}
+                awslogs-region: ap-southeast-1
+                awslogs-stream-prefix: worker
+            Environment:
+              - Name: WORK_QUEUE_URL
+                Value: ${self:custom.workQueueUrl}
+              - Name: SUBMISSIONS_TABLE_NAME
+                Value: ${self:custom.submissionsTableName}
+              - Name: PROBLEMS_TABLE_NAME
+                Value: ${self:custom.problemsTableName}
+              - Name: EVENT_BUS_NAME
+                Value: ${self:custom.busName}
+              - Name: S3_LOGS_BUCKET
+                Value: ${self:service}-${opt:stage}-failure-logs
+              - Name: AWS_REGION
+                Value: ap-southeast-1
+              - Name: PYTHONUNBUFFERED
+                Value: '1'
+            # Soft ulimit on FDs — Fargate's default 1024 is overkill.
+            # We do NOT set MemoryReservation or Ulimits that target
+            # the inner sandbox — the design §5 says those live in
+            # the dispatcher (preexec_fn=resource.setrlimit) for v1,
+            # and in the runner subprocess via process group limits
+            # in a future revision.
+
+    WorkerSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: ${self:service}-${opt:stage} - workers egress only
+        VpcId: ${self:custom.defaultVpcId}
+        SecurityGroupEgress:
+          - IpProtocol: '-1'
+            CidrIp: 0.0.0.0/0
+            Description: Allow all egress (SQS / DynamoDB / EventBridge / ECR are public endpoints)
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${opt:stage}
+
+    WorkerService:
+      Type: AWS::ECS::Service
+      DependsOn:
+        - WorkerTaskDefinition
+      Properties:
+        ServiceName: ${self:service}-${opt:stage}
+        Cluster:
+          Fn::GetAtt: [WorkerCluster, Arn]
+        DesiredCount: 1
+        LaunchType: FARGATE
+        DeploymentConfiguration:
+          MaximumPercent: 200
+          MinimumHealthyPercent: 100
+          DeploymentCircuitBreaker:
+            Enable: false
+            Rollback: false
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            AssignPublicIp: ENABLED
+            Subnets: ${self:custom.publicSubnetIds}
+            SecurityGroups:
+              - Ref: WorkerSecurityGroup
+        TaskDefinition:
+          Ref: WorkerTaskDefinition
+
+    # NOTE on event source: this stack does NOT use
+    # AWS::SQS::EventSourceMapping. Fargate services can't natively
+    # consume SQS as event source mappings — those are Lambda-only.
+    # The dispatcher (in runs/dispatcher.py) polls the work queue
+    # in a tight loop with WaitTimeSeconds=20 (long polling). This is
+    # fine for v1's throughput; for higher throughput in v2 we'd add
+    # capacity-provider autoscaling driven by CW's
+    # ApproximateNumberOfMessagesVisible alarm on the queue.
+
+  Outputs:
+    WorkerServiceName:
+      Value:
+        Fn::GetAtt: [WorkerService, Name]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerServiceName
+
+    WorkerTaskDefinitionArn:
+      Value:
+        Ref: WorkerTaskDefinition
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerTaskDefinitionArn
+
+    WorkerSecurityGroupId:
+      Value:
+        Ref: WorkerSecurityGroup
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerSecurityGroupId

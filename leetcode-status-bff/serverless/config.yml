@@ -1,0 +1,21 @@
+params:
+  dev:
+    debug: '*'
+    account: dev
+    logRetentionInDays: 3
+
+custom:
+  partition: aws
+  org: mashukov
+  subsys: leetcode
+
+  # Cross-stack imports. Fallbacks let `sls package` run before
+  # upstream stacks are deployed (useful when iterating locally).
+  submissionsTableName: ${cf:leetcode-submissions-bff-${opt:stage, 'dev'}.SubmissionsTableName, 'fallback-submissions'}
+  submissionsTableArn: ${cf:leetcode-submissions-bff-${opt:stage, 'dev'}.SubmissionsTableArn, 'arn:aws:dynamodb:ap-southeast-1:000000000000:table/fallback-submissions'}
+
+environment:
+  SUBMISSIONS_TABLE: ${self:custom.submissionsTableName}
+  STAGE: ${opt:stage, 'dev'}
+  SERVICE: ${self:service}
+  AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'

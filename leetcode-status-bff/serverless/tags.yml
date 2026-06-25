@@ -1,0 +1,6 @@
+tags:
+  service: ${self:service}
+  stage: ${opt:stage}
+  subsys: ${self:custom.subsys}
+  role: status-bff
+  env: ${self:custom.org}-${opt:stage}

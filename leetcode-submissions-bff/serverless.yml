@@ -1,0 +1,128 @@
+# leetcode-submissions-bff — Serverless Framework v4
+# Submission ingest path for the LeetCode service. JWT-protected HTTP API
+# that accepts user code submissions, persists them, and hands them to
+# the worker fleet via SQS.
+#
+# Architecture (event-sourced, CQRS, fork of the
+# pastebin-public-bff listener pattern — but inverted: this stack
+# WRITES the source-of-truth table; submissions-bff is the
+# write side):
+#   rest     — POST /problems/{slug}/submission, GET /me/submissions,
+#              GET /health (all JWT-required).
+#   listener — none at MVP. Submissions are not derived from the bus
+#              today; the row is the source of truth, and workers
+#              mutate it in place. (Future: a moderator-bff could
+#              subscribe to SubmissionAccepted events.)
+#
+# Cross-stack refs:
+#   - ProblemsTableName/Arn from leetcode-problems-bff (read for the
+#     existence check + slug->problemId lookup before enqueueing).
+#   - busName, UserPoolId, UserPoolClientId from leetcode-event-hub
+#     and leetcode-auth (for JWT authorizer only — this stack does
+#     NOT publish events at MVP).
+#
+# Deploy order:
+#   1) leetcode-event-hub
+#   2) leetcode-auth
+#   3) leetcode-worker-images
+#   4) leetcode-problems-bff
+#   5) leetcode-submissions-bff (this stack)
+#   6) leetcode-status-bff
+#   7) leetcode-workers
+#
+# Stack outputs: SubmissionsTableName, SubmissionsTableArn,
+# WorkQueueUrl, WorkQueueArn, DlqUrl.
+
+service: ${self:custom.subsys}-submissions-bff
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-southeast-1
+  stage: ${opt:stage, 'dev'}
+  endpointType: REGIONAL
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  environment: ${file(serverless/config.yml):environment}
+  iam:
+    role: ${file(serverless/iam.yml):role}
+  httpApi:
+    cors: true
+    metrics: true
+    authorizers:
+      cognitoJwtAuthorizer:
+        type: jwt
+        identitySource: '$request.header.Authorization'
+        issuerUrl:
+          Fn::Sub: 'https://cognito-idp.${AWS::Region}.amazonaws.com/${cf:leetcode-auth-${opt:stage}.UserPoolId}'
+        audience:
+          - ${cf:leetcode-auth-${opt:stage}.UserPoolClientId}
+
+params: ${file(serverless/config.yml):params}
+custom: ${file(serverless/config.yml):custom}
+
+build:
+  esbuild:
+    bundle: true
+    minify: false
+    target: 'node20'
+    sourcemap:
+      type: linked
+      setNodeOptions: true
+    external:
+      - '@aws-sdk/*'
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!.git/**'
+
+functions:
+  # POST /problems/{slug}/submission — submit a solution attempt.
+  # Body: { language: "python"|"javascript", code: string }
+  # 202: { submissionId, statusUrl }
+  # The 202 (not 201) signals that the submission was ACCEPTED for
+  # processing, not that it has RUN. statusUrl points at the
+  # status-bff route the client polls to learn the verdict.
+  submitSolution:
+    handler: src/rest/handlers.submitSolution
+    memorySize: 256
+    timeout: 10
+    events:
+      - httpApi:
+          path: /problems/{slug}/submission
+          method: post
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /me/submissions — list submissions by the caller via GSI1.
+  # 200: { count, items: SubmissionSummary[] }
+  listMySubmissions:
+    handler: src/rest/handlers.listMySubmissions
+    memorySize: 256
+    timeout: 10
+    events:
+      - httpApi:
+          path: /me/submissions
+          method: get
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /health — JWT-protected health check.
+  # "Any valid token" because all routes are protected; this one
+  # is mainly a smoke for the auth path.
+  health:
+    handler: src/rest/handlers.health
+    memorySize: 128
+    timeout: 5
+    events:
+      - httpApi:
+          path: /health
+          method: get
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+resources: ${file(serverless/resources.yml):resources}

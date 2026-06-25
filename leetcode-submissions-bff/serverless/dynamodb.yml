@@ -1,0 +1,18 @@
+# IAM scoped to this stack's table ONLY for write (PutItem), plus
+# scoped Query on GSI1 for listMySubmissions. Read on the problems
+# table is a separate statement (see cross-stack-reads.yml) because
+# it crosses stack boundaries.
+iamRoleStatements:
+  Effect: Allow
+  Action:
+    - dynamodb:GetItem
+    - dynamodb:PutItem
+    - dynamodb:UpdateItem
+    - dynamodb:Query
+  Resource:
+    - Fn::GetAtt: [SubmissionsTable, Arn]
+    - Fn::Join:
+        - '/'
+        - - Fn::GetAtt: [SubmissionsTable, Arn]
+          - index
+          - '*'

@@ -1,0 +1,48 @@
+# leetcode-workers/serverless/cluster.yml
+#
+# ECS cluster + log group. The cluster is empty; the Fargate service
+# (service.yml) registers tasks into it. Log group is dedicated so
+# logRetentionInDays from config.yml applies cleanly to worker logs
+# (default CFN logs groups from awslogs driver don't get lifecycle
+# applied automatically by SLS v4).
+#
+# We don't enable Container Insights at v1 — adds CW metrics cost
+# and we don't have dashboards yet.
+
+resources:
+  Resources:
+    WorkerCluster:
+      Type: AWS::ECS::Cluster
+      Properties:
+        ClusterName: ${self:service}-${opt:stage}
+        ClusterSettings:
+          - Name: containerInsights
+            Value: disabled
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${opt:stage}
+
+    WorkerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/ecs/${self:service}-${opt:stage}
+        RetentionInDays: ${opt:logRetentionInDays, 3}
+
+  Outputs:
+    WorkerClusterName:
+      Value:
+        Ref: WorkerCluster
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerClusterName
+
+    WorkerClusterArn:
+      Value:
+        Fn::GetAtt: [WorkerCluster, Arn]
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerClusterArn
+
+    WorkerLogGroupName:
+      Value:
+        Ref: WorkerLogGroup
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WorkerLogGroupName

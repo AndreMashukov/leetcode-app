@@ -1,0 +1,11 @@
+# DDB read on leetcode-submissions-bff's SubmissionsTable.
+#
+# Minimal: GetItem only (no Query — we look up by primary key, not
+# by GSI). The submissions-bff ListMySubmissions endpoint uses GSI1
+# for the list view; status-bff is the per-id status poll.
+iamRoleStatements:
+  Effect: Allow
+  Action:
+    - dynamodb:GetItem
+  Resource:
+    - ${self:custom.submissionsTableArn}

@@ -1,0 +1,20 @@
+{
+  "name": "leetcode-workers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fargate workers for the leetcode service — long-running task that polls SQS and executes user code in the combined Python+Node image.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "package": "serverless package",
+    "deploy": "serverless deploy",
+    "info": "serverless info",
+    "remove": "serverless remove",
+    "test": "python3 tests/test_dispatcher_logic.py",
+    "logs": "serverless logs -f"
+  },
+  "devDependencies": {
+    "serverless": "^4.0.0"
+  }
+}

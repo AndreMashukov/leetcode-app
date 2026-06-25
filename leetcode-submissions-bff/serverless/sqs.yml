@@ -1,0 +1,11 @@
+# SQS SendMessage on the work queue.
+#
+# Workers (in the leetcode-workers stack) ReceiveMessage +
+# DeleteMessage. We only send from this stack.
+iamRoleStatements:
+  Effect: Allow
+  Action:
+    - sqs:SendMessage
+    - sqs:GetQueueAttributes
+  Resource:
+    - Fn::GetAtt: [WorkQueue, Arn]

@@ -1,0 +1,5 @@
+role:
+  statements:
+    - ${file(serverless/dynamodb.yml):iamRoleStatements}
+    - ${file(serverless/cross-stack-reads.yml):iamRoleStatements}
+    - ${file(serverless/sqs.yml):iamRoleStatements}

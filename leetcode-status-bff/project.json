@@ -1,0 +1,28 @@
+{
+  "name": "leetcode-status-bff",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "leetcode-status-bff/src",
+  "projectType": "application",
+  "targets": {
+    "typecheck": {
+      "cache": true,
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    },
+    "package": {
+      "cache": false,
+      "options": {
+        "command": "../node_modules/.bin/serverless package --stage ${NX_STAGE:-dev} --region ap-southeast-1"
+      },
+      "dependsOn": ["^typecheck"]
+    },
+    "deploy": {
+      "cache": false,
+      "options": {
+        "command": "../node_modules/.bin/serverless deploy --stage ${NX_STAGE:-dev} --region ap-southeast-1"
+      },
+      "dependsOn": ["^typecheck"]
+    }
+  }
+}

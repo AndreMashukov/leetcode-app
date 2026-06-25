@@ -1,0 +1,34 @@
+params:
+  dev:
+    debug: '*'
+    account: dev
+    logRetentionInDays: 3
+
+custom:
+  partition: aws
+  org: mashukov
+  subsys: leetcode
+
+  # Cross-stack imports. Fallbacks let `sls package` run before
+  # the upstream stacks are deployed (L2 build verification). At
+  # deploy time Serverless re-resolves; if a stack is missing the
+  # error is loud and clear.
+  #
+  # Naming: per the project convention, exported names from
+  # leetcode-problems-bff are Capitalized (ProblemsTableName,
+  # ProblemsTableArn). The Cognito exports from leetcode-auth are
+  # UserPoolId / UserPoolClientId (per the auth stack convention).
+  problemsTableName: ${cf:leetcode-problems-bff-${opt:stage}.ProblemsTableName, 'leetcode-problems-bff-${opt:stage}-problems'}
+  problemsTableArn: ${cf:leetcode-problems-bff-${opt:stage}.ProblemsTableArn, 'arn:${self:custom.partition}:dynamodb:${opt:region}:${aws:accountId}:table/leetcode-problems-bff-${opt:stage}-problems'}
+  busName: ${cf:leetcode-event-hub-${opt:stage}.busName, 'leetcode-event-hub-${opt:stage}-bus'}
+
+environment:
+  SERVICE: ${self:service}
+  STAGE: ${opt:stage}
+  AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+
+restEnvironment:
+  SUBMISSIONS_TABLE: ${self:service}-${opt:stage}-submissions
+  WORK_QUEUE_URL:
+    Ref: WorkQueue
+  PROBLEMS_TABLE: ${self:custom.problemsTableName}

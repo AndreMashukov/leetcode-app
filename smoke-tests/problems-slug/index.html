@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>leetcode-problems-bff · smoke /problems/{slug}</title>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --surface: #14181d;
+      --surface-2: #1c2229;
+      --border: #2a313a;
+      --fg: #e6edf3;
+      --fg-dim: #9aa6b2;
+      --accent: #4ade80;
+      --accent-fg: #052e16;
+      --warn: #f59e0b;
+      --error: #f87171;
+      --ok: #22c55e;
+      --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Fira Code", Menlo, monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.01em;
+    }
+    .subtitle {
+      color: var(--fg-dim);
+      font-size: 13px;
+      margin-bottom: 24px;
+      font-family: var(--mono);
+    }
+    .subtitle code { color: var(--accent); }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .meta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .meta-card .label {
+      font-size: 11px;
+      color: var(--fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .meta-card .value {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--fg);
+      word-break: break-all;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .controls label {
+      font-size: 12px;
+      color: var(--fg-dim);
+      margin-right: 6px;
+    }
+    .controls input {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      width: 240px;
+      outline: none;
+    }
+    .controls input:focus { border-color: var(--accent); }
+    button {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: none;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--sans);
+    }
+    button:hover { filter: brightness(1.08); }
+    button.secondary {
+      background: transparent;
+      color: var(--fg);
+      border: 1px solid var(--border);
+    }
+    .results {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .case {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .case.pass { border-left-color: var(--ok); }
+    .case.fail { border-left-color: var(--error); }
+    .case.pending { border-left-color: var(--warn); }
+    .case-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+    }
+    .case-name {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .case-badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--border);
+      color: var(--fg);
+    }
+    .case.pass .case-badge { background: var(--ok); color: var(--accent-fg); }
+    .case.fail .case-badge { background: var(--error); color: #2a0a0a; }
+    .case.pending .case-badge { background: var(--warn); color: #2a1a0a; }
+    .case-body {
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .case-body .full { grid-column: 1 / -1; }
+    .field-label {
+      font-size: 10px;
+      color: var(--fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .field-value {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--fg);
+      max-height: 280px;
+      overflow: auto;
+    }
+    .summary {
+      margin-top: 24px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .summary.fail { border-left: 4px solid var(--error); }
+    .summary.pass { border-left: 4px solid var(--ok); }
+    .summary .verdict {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .summary.pass .verdict { color: var(--ok); }
+    .summary.fail .verdict { color: var(--error); }
+    .summary .counts {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--fg-dim);
+    }
+    .health-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .health-pill .dot {
+      width: 7px; height: 7px; border-radius: 999px;
+      background: var(--fg-dim);
+    }
+    .health-pill.ok .dot { background: var(--ok); }
+    .health-pill.bad .dot { background: var(--error); }
+    .footnote {
+      margin-top: 24px;
+      color: var(--fg-dim);
+      font-size: 11px;
+      font-family: var(--mono);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>leetcode-problems-bff · smoke /problems/{slug}</h1>
+    <div class="subtitle">
+      API: <code id="apiUrl">…</code> · Stage: <code>dev</code> · Region: <code>ap-southeast-1</code>
+    </div>
+
+    <div class="meta">
+      <div class="meta-card">
+        <div class="label">Stack</div>
+        <div class="value">leetcode-problems-bff-dev</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Author</div>
+        <div class="value">sub: admin@example.com</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Auth mode</div>
+        <div class="value" id="authMode">Cognito JWT (admin pool)</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Health</div>
+        <div class="value">
+          <span class="health-pill" id="healthPill">
+            <span class="dot"></span>
+            <span id="healthText">checking…</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label for="slugInput">slug to look up:</label>
+      <input id="slugInput" type="text" value="two-sum" />
+      <button id="runBtn">Run smoke</button>
+      <button id="seedBtn" class="secondary">Seed problem (needs JWT)</button>
+      <span class="health-pill" id="tokenState"><span class="dot"></span><span id="tokenText">jwt loaded</span></span>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <div class="summary" id="summary">
+      <span class="verdict">RUNNING</span>
+      <span class="counts" id="counts">0 / 0</span>
+    </div>
+
+    <div class="footnote">
+      Verification: this harness opens from a real browser and exercises
+      the live API. The 4 cases below are the contract for v1: public
+      read by slug must succeed for a known slug, return 404 for a bogus
+      slug, the auth-required list must reject without a JWT (401), and
+      the seed endpoint must round-trip a create-then-public-read cycle.
+    </div>
+  </div>
+
+<script>
+  // API endpoint for the dev stage of leetcode-problems-bff.
+  const API = "https://73yfry46sl.execute-api.ap-southeast-1.amazonaws.com";
+  document.getElementById("apiUrl").textContent = API;
+
+  // JWT preloaded for the smoke harness so the test is reproducible
+  // and self-contained. Real product traffic gets the token from
+  // Cognito's hosted UI at the edge of the SPA — the harness bakes
+  // it in for one-click verification.
+  const ID_TOKEN = "eyJraWQiOiJqditNOGpzUElkVFFWK0xzMFluaWovOHhWSkxRM2RXQlN1MWFlOGJZdXpvPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMS5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0xX0JJaEZvQUE4UiIsImNvZ25pdG86dXNlcm5hbWUiOiIwOThhNTVjYy0wMDMxLTcwNDYtZTU4OS02NDY3ZTc3NzFjNDgiLCJvcmlnaW5fanRpIjoiZmNmMzYzNDItZGZhZS00YjU2LTg2NGItYTgzMTZmOGI0ZjgxIiwiYXVkIjoiMmJwbWk1bXRhYTJlcWRyaWE1ZzFpaDVpcDkiLCJldmVudF9pZCI6IjliMTM2MGNhLWZhN2QtNDZmNC1iMzI1LWRiOGJhYmI0NjNhMiIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzgyMjk3MDI3LCJleHAiOjE3ODIzMDA2MjcsImlhdCI6MTc4MjI5NzAyNywianRpIjoiZDExYWVlNTAtMmUwMC00MTI1LTgzYTItZTI1NWQyMmIxYWVlIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSJ9.3X4F7m3xl62UmWxfmw1bKsdVObMR-yZ8dO286SpGIBWgNm3j5WvGPMeDFC1uCSOHRYdlOV_d22F6GcGeuI1juNr0klaAakfIVTSZ9bGsGDYTA3JBZQGrRLLrEySypcpUqym5DGtPovx_s2mAeauGd77-MbEigAk4cRGeAIcckATUVjhNEtBftdJJTZdUdmBsAdgYo07qBqeIEdlFV-IhxzTgvX-CBBb-3gtBRf3CMoTyV9zRNPpohhUwJungHLeg5MGN8yEMNTvpgLvLer9fxGwob49FYNQB-yofkG57-wvLphhbI9S6D7OmuxnOha6JYV4AL4AZzJVLe-Sbl-FE3w";
+  const TOKEN_AVAILABLE = !ID_TOKEN.startsWith("__");
+  document.getElementById("tokenText").textContent =
+    TOKEN_AVAILABLE ? "jwt loaded" : "no jwt (seed/POST will skip)";
+  document.getElementById("tokenState").classList.toggle("ok", TOKEN_AVAILABLE);
+
+  const cases = [
+    {
+      id: "health",
+      name: "GET /health → 200",
+      method: "GET",
+      path: "/health",
+      auth: false,
+      expect: 200,
+      assert: (j) => j && j.ok === true && j.service === "leetcode-problems-bff",
+    },
+    {
+      id: "slug-public-hit",
+      name: "GET /problems/{slug} (existing) → 200 + body shape",
+      method: "GET",
+      path: () => "/problems/" + document.getElementById("slugInput").value,
+      auth: false,
+      expect: 200,
+      assert: (j) => j && typeof j.problemId === "string"
+        && j.problemId.length === 8
+        && j.slug && j.title && j.difficulty
+        && Array.isArray(j.tags),
+    },
+    {
+      id: "slug-public-miss",
+      name: "GET /problems/no-such-slug-xyzzy → 404 + not_found error",
+      method: "GET",
+      path: "/problems/no-such-slug-xyzzy",
+      auth: false,
+      expect: 404,
+      assert: (j) => j && j.error === "not_found",
+    },
+    {
+      id: "auth-required-no-token",
+      name: "GET /problems (no JWT) → 401",
+      method: "GET",
+      path: "/problems",
+      auth: false,
+      expect: 401,
+      assert: () => true, // any 401 body is fine; shape varies by gateway
+    },
+    {
+      id: "seed-and-read",
+      name: "POST /problems → 201 → GET /problems/{slug} → 200 (round trip)",
+      method: "POST",
+      path: "/problems",
+      auth: true,
+      expect: 201,
+      assert: (j) => j && j.problemId && j.slug === "two-sum",
+      postBody: () => ({
+        title: "Two Sum",
+        slug: "two-sum",
+        description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+        statement: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+        difficulty: "easy",
+        tags: ["arrays", "hash-table"],
+        examples: [{ input: "nums=[2,7,11,15], target=9", output: "[0,1]", explanation: "Because nums[0]+nums[1]==9" }],
+        constraints: ["2 <= nums.length <= 10^4"],
+        timeLimitMs: 2000,
+        memoryLimitMb: 256,
+      }),
+      // after this case passes, fire GET /problems/{slug} and assert 200
+      followup: {
+        method: "GET",
+        path: (j) => "/problems/" + j.slug,
+        auth: false,
+        expect: 200,
+        assert: (j) => j && j.problemId && j.title === "Two Sum",
+      },
+    },
+  ];
+
+  async function runCase(c) {
+    const start = performance.now();
+    const path = typeof c.path === "function" ? c.path() : c.path;
+    const headers = { "Content-Type": "application/json" };
+    if (c.auth) {
+      if (!TOKEN_AVAILABLE) {
+        return {
+          id: c.id, name: c.name, status: "skip",
+          httpStatus: 0, body: { error: "no_jwt", message: "Token placeholder not replaced. Run with: node seed.js" },
+          ms: 0, expect: c.expect,
+        };
+      }
+      headers["Authorization"] = "Bearer " + ID_TOKEN;
+    }
+    let resp, body, httpStatus;
+    try {
+      const init = { method: c.method, headers };
+      if (c.method === "POST" && c.postBody) {
+        init.body = JSON.stringify(c.postBody());
+      }
+      resp = await fetch(API + path, init);
+      httpStatus = resp.status;
+      const text = await resp.text();
+      try { body = JSON.parse(text); }
+      catch { body = { raw: text }; }
+    } catch (e) {
+      return {
+        id: c.id, name: c.name, status: "fail",
+        httpStatus: 0, body: { error: "network", message: String(e) },
+        ms: Math.round(performance.now() - start), expect: c.expect,
+      };
+    }
+    const ms = Math.round(performance.now() - start);
+    const statusOk = httpStatus === c.expect;
+    let shapeOk = true;
+    try {
+      if (statusOk && c.assert) shapeOk = c.assert(body);
+    } catch (_) { shapeOk = false; }
+    const pass = statusOk && shapeOk;
+
+    let followupResult = null;
+    if (pass && c.followup) {
+      const f = c.followup;
+      const fpath = typeof f.path === "function" ? f.path(body) : f.path;
+      const fheaders = { "Content-Type": "application/json" };
+      if (f.auth) fheaders["Authorization"] = "Bearer " + ID_TOKEN;
+      const fr = await fetch(API + fpath, { method: f.method, headers: fheaders });
+      const fstatus = fr.status;
+      const ftext = await fr.text();
+      let fbody;
+      try { fbody = JSON.parse(ftext); } catch { fbody = { raw: ftext }; }
+      const fshapeOk = f.assert ? f.assert(fbody) : true;
+      followupResult = {
+        name: f.method + " " + fpath,
+        pass: fstatus === f.expect && fshapeOk,
+        status: fstatus,
+        expect: f.expect,
+        body: fbody,
+      };
+    }
+
+    return {
+      id: c.id, name: c.name, status: pass ? "pass" : "fail",
+      httpStatus, body, ms, expect: c.expect, followupResult,
+    };
+  }
+
+  function renderResults(results) {
+    const el = document.getElementById("results");
+    el.innerHTML = "";
+    for (const r of results) {
+      const div = document.createElement("div");
+      div.className = "case " + r.status;
+      div.innerHTML = `
+        <div class="case-header">
+          <span class="case-name">${r.name}</span>
+          <span class="case-badge">${r.status} · ${r.httpStatus || "—"} · ${r.ms}ms</span>
+        </div>
+        <div class="case-body">
+          <div>
+            <div class="field-label">Expected status</div>
+            <div class="field-value">${r.expect}</div>
+          </div>
+          <div>
+            <div class="field-label">Response body</div>
+            <div class="field-value">${JSON.stringify(r.body, null, 2)}</div>
+          </div>
+          ${r.followupResult ? `
+            <div class="full">
+              <div class="field-label">Followup · ${r.followupResult.name}</div>
+              <div class="field-value">${r.followupResult.pass ? "PASS" : "FAIL"} · got ${r.followupResult.status}, expected ${r.followupResult.expect}
+${JSON.stringify(r.followupResult.body, null, 2)}</div>
+            </div>
+          ` : ""}
+        </div>
+      `;
+      el.appendChild(div);
+    }
+    const passCount = results.filter(r => r.status === "pass").length;
+    const total = results.length;
+    const allPass = passCount === total;
+    const sum = document.getElementById("summary");
+    sum.className = "summary " + (allPass ? "pass" : "fail");
+    sum.querySelector(".verdict").textContent = allPass ? "ALL PASS" : "FAILURES";
+    document.getElementById("counts").textContent = passCount + " / " + total;
+  }
+
+  async function runAll() {
+    document.getElementById("results").innerHTML = '<div class="case pending"><div class="case-header"><span class="case-name">Running…</span><span class="case-badge">running</span></div></div>';
+    const out = [];
+    // health first for the pill
+    const healthResult = await runCase(cases[0]);
+    out.push(healthResult);
+    document.getElementById("healthText").textContent =
+      healthResult.status === "pass" ? "ok" : "down";
+    document.getElementById("healthPill").classList.toggle("ok", healthResult.status === "pass");
+    document.getElementById("healthPill").classList.toggle("bad", healthResult.status !== "pass");
+    // remaining
+    for (let i = 1; i < cases.length; i++) {
+      out.push(await runCase(cases[i]));
+    }
+    renderResults(out);
+  }
+
+  document.getElementById("runBtn").addEventListener("click", runAll);
+  document.getElementById("seedBtn").addEventListener("click", runAll);
+  document.getElementById("slugInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") runAll();
+  });
+  // Run on load so a screenshot captures fresh state.
+  runAll();
+</script>
+</body>
+</html>

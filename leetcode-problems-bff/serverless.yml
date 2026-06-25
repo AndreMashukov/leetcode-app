@@ -1,0 +1,179 @@
+# leetcode-problems-bff — Serverless Framework v4
+#
+# Authoring + read API for the LeetCode-style coding platform.
+# Cognito JWT-protected HTTP API + 5 REST functions + 1 trigger lambda.
+#
+# Architecture (see ../design-research.md §4 + §6):
+#   rest (5 routes):
+#     POST   /problems       createProblem        JWT (author)
+#     GET    /me/problems    listMyProblems       JWT (author)
+#     GET    /problems       listProblems         JWT (any user)
+#     GET    /problems/{slug} getProblemBySlug    public (no JWT)
+#     GET    /health         health               public
+#   trigger — consumes DDB stream on ProblemsTable, emits
+#             ProblemCreated / ProblemDeleted to the bus. This is the
+#             SOLE producer of those events (mirrors pastebin's
+#             pastebin-author-bff pattern).
+#
+#   The createProblem handler does NOT call PutEvents directly — the
+#   DDB stream + trigger is the single source of truth. If a future
+#   backfill script writes to the table, the trigger still emits
+#   correctly, and downstream listeners (submissions-bff listener
+#   materializes a lean problem view) get exactly one event per write
+#   even on retries. Direct emit from the handler would double-fan-out
+#   and corrupt downstream state.
+#
+#   NO listener leg on this stack: problems-bff has no consumer of its
+#   own events. The sole listener is in leetcode-submissions-bff.
+#
+# Deploy order:
+#   1. leetcode-event-hub
+#   2. leetcode-auth
+#   3. leetcode-worker-images
+#   4. leetcode-problems-bff  <-- this stack
+#   5. leetcode-submissions-bff
+#   6. leetcode-status-bff
+#
+# Stack outputs: ProblemsTableName, ProblemsTableArn, ProblemsTableStreamArn, ApiEndpoint.
+
+service: ${self:custom.subsys}-problems-bff
+
+frameworkVersion: ^4
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-southeast-1
+  stage: ${opt:stage, 'dev'}
+  endpointType: REGIONAL
+  logRetentionInDays: ${opt:logRetentionInDays, 3}
+  environment: ${file(serverless/config.yml):environment}
+  iam:
+    role: ${file(serverless/iam.yml):role}
+  httpApi:
+    cors: true
+    metrics: true
+    authorizers:
+      cognitoJwtAuthorizer:
+        type: jwt
+        identitySource: '$request.header.Authorization'
+        issuerUrl:
+          Fn::Sub: 'https://cognito-idp.${AWS::Region}.amazonaws.com/${cf:leetcode-auth-${opt:stage}.UserPoolId}'
+        audience:
+          - ${cf:leetcode-auth-${opt:stage}.UserPoolClientId}
+
+params: ${file(serverless/config.yml):params}
+custom: ${file(serverless/config.yml):custom}
+
+build:
+  esbuild:
+    bundle: true
+    minify: false
+    target: 'node20'
+    sourcemap:
+      type: linked
+      setNodeOptions: true
+    external:
+      - '@aws-sdk/*'
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!.git/**'
+
+functions:
+  # POST /problems — create a new problem statement. Cognito JWT required.
+  # Body: { title, slug, description, difficulty, tags, examples, constraints }
+  # 201: { problemId, slug, title, ... }
+  # Rejects reserved fields (problemId is server-generated).
+  createProblem:
+    handler: src/rest/handlers.createProblem
+    memorySize: 256
+    timeout: 15
+    events:
+      - httpApi:
+          path: /problems
+          method: post
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /me/problems — list problems authored by the caller via GSI1.
+  # 200: { count, items: ProblemSummary[] }
+  listMyProblems:
+    handler: src/rest/handlers.listMyProblems
+    memorySize: 256
+    timeout: 15
+    events:
+      - httpApi:
+          path: /me/problems
+          method: get
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /problems — list all problems (paginated, optional tag filter).
+  # 200: { count, items: ProblemSummary[], nextCursor? }
+  listProblems:
+    handler: src/rest/handlers.listProblems
+    memorySize: 256
+    timeout: 15
+    events:
+      - httpApi:
+          path: /problems
+          method: get
+          authorizer: cognitoJwtAuthorizer
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /problems/{slug} — public read by slug. NO JWT.
+  # 200: full Problem object (description + tests). Use this for the
+  #      problem detail page; status-bff will overlay submission state
+  #      via a separate query, joined client-side by problemId.
+  getProblemBySlug:
+    handler: src/rest/handlers.getProblemBySlug
+    memorySize: 256
+    timeout: 10
+    events:
+      - httpApi:
+          path: /problems/{slug}
+          method: get
+          # Public — no authorizer. Rate-limit at the API Gateway level
+          # post-MVP if needed; for v1 the URL space is unguessable
+          # enough (8-char id + 4-char slug suffix) that we don't
+          # bother with WAF.
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # GET /health — public health check. NO authorizer.
+  health:
+    handler: src/rest/handlers.health
+    memorySize: 128
+    timeout: 5
+    events:
+      - httpApi:
+          path: /health
+          method: get
+    environment: ${file(serverless/config.yml):restEnvironment}
+
+  # Trigger leg — consumes DDB stream on ProblemsTable, emits
+  # ProblemCreated (INSERT) and ProblemDeleted (REMOVE) to the bus.
+  # Sole producer of those events. MODIFY events are also observed
+  # for full audit but currently not re-emitted (we don't update
+  # problems at MVP; v1.1 might add author edits).
+  # Wired via ProblemsTableEventSourceMapping in resources.yml.
+  trigger:
+    handler: src/trigger.handle
+    memorySize: 256
+    timeout: 60
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt: [ProblemsTable, StreamArn]
+          filterPatterns:
+            - eventName: [INSERT]
+            - eventName: [REMOVE]
+          startingPosition: TRIM_HORIZON
+          functionResponseType: ReportBatchItemFailures
+    environment: ${file(serverless/config.yml):triggerEnvironment}
+
+resources: ${file(serverless/resources.yml):resources}
