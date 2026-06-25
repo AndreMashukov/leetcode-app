@@ -42,6 +42,7 @@ import type {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
+  GetCommand,
   PutCommand,
   QueryCommand,
   ScanCommand,
@@ -54,6 +55,8 @@ import type {
   ProblemExample,
   ProblemRow,
   ProblemSummary,
+  ProblemTestCase,
+  StarterCode,
 } from "../models/problem";
 
 const ddb = new DynamoDBClient({});
@@ -96,6 +99,12 @@ const MAX_EXAMPLES = 10;
 
 /** Max constraints strings per problem. */
 const MAX_CONSTRAINTS = 20;
+
+/** Max worker test cases per problem. */
+const MAX_TEST_CASES = 50;
+
+/** Max bytes per test case input/expected string. */
+const MAX_TEST_FIELD_LEN = 8192;
 
 /** Max examples/constraints string length. */
 const MAX_EXAMPLE_FIELD_LEN = 4096;
@@ -287,6 +296,110 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     }
   }
 
+  // Optional worker fields — stored on the row for leetcode-workers.
+  let parsedTestCases: ProblemTestCase[] | undefined;
+  if (body.testCases !== undefined) {
+    if (!Array.isArray(body.testCases)) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "testCases" must be an array',
+      });
+    }
+    if (body.testCases.length > MAX_TEST_CASES) {
+      return json(400, {
+        error: "bad_request",
+        message: `field "testCases" exceeds max of ${MAX_TEST_CASES}`,
+      });
+    }
+    parsedTestCases = [];
+    for (const tc of body.testCases) {
+      if (
+        typeof tc !== "object" ||
+        tc === null ||
+        typeof (tc as ProblemTestCase).input !== "string" ||
+        typeof (tc as ProblemTestCase).expected !== "string"
+      ) {
+        return json(400, {
+          error: "bad_request",
+          message: 'each test case must have string "input" and "expected"',
+        });
+      }
+      const t = tc as ProblemTestCase;
+      if (
+        t.input.length > MAX_TEST_FIELD_LEN ||
+        t.expected.length > MAX_TEST_FIELD_LEN
+      ) {
+        return json(400, {
+          error: "bad_request",
+          message: `test case fields exceed max length ${MAX_TEST_FIELD_LEN}`,
+        });
+      }
+      parsedTestCases.push({ input: t.input, expected: t.expected });
+    }
+  }
+
+  let parsedStarterCode: StarterCode | undefined;
+  if (body.starterCode !== undefined) {
+    if (
+      typeof body.starterCode !== "object" ||
+      body.starterCode === null ||
+      Array.isArray(body.starterCode)
+    ) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "starterCode" must be an object of string values',
+      });
+    }
+    parsedStarterCode = {};
+    for (const [k, v] of Object.entries(body.starterCode as Record<string, unknown>)) {
+      if (typeof v !== "string") {
+        return json(400, {
+          error: "bad_request",
+          message: `starterCode.${k} must be a string`,
+        });
+      }
+      parsedStarterCode[k] = v;
+    }
+  }
+
+  let timeLimitMs: number | undefined;
+  if (body.timeLimitMs !== undefined) {
+    if (typeof body.timeLimitMs !== "number" || !Number.isFinite(body.timeLimitMs)) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "timeLimitMs" must be a finite number',
+      });
+    }
+    timeLimitMs = body.timeLimitMs;
+  }
+
+  let memoryLimitKb: number | undefined;
+  if (body.memoryLimitKb !== undefined) {
+    if (typeof body.memoryLimitKb !== "number" || !Number.isFinite(body.memoryLimitKb)) {
+      return json(400, {
+        error: "bad_request",
+        message: 'field "memoryLimitKb" must be a finite number',
+      });
+    }
+    memoryLimitKb = body.memoryLimitKb;
+  }
+
+  const existingSlug = await ddbDoc.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: "gsi3",
+      KeyConditionExpression: "slugKey = :sk",
+      ExpressionAttributeValues: { ":sk": `SLUG#${slug}` },
+      Limit: 1,
+    }),
+  );
+  if (existingSlug.Items?.length) {
+    return json(409, {
+      error: "conflict",
+      message: "a problem with this slug already exists",
+    });
+  }
+
   const problemId = generateProblemId();
   const createdAt = new Date().toISOString();
   const pk = `PROBLEM#${problemId}`;
@@ -310,6 +423,10 @@ export const createProblem: APIGatewayProxyHandlerV2 = async (event) => {
     // the same row. KEYS_ONLY projection is enough — submissions-bff
     // reads problemId off the row's primary key (DDB copies it in).
     slugKey: `SLUG#${slug}`,
+    ...(parsedTestCases ? { testCases: parsedTestCases } : {}),
+    ...(parsedStarterCode ? { starterCode: parsedStarterCode } : {}),
+    ...(timeLimitMs !== undefined ? { timeLimitMs } : {}),
+    ...(memoryLimitKb !== undefined ? { memoryLimitKb } : {}),
     // GSI2 attributes: each tag gets its own (tagSlug, tagGsisk). We
     // store ONE row per (problemId, tag) pair? No — DDB single-table
     // design stores ONE row per logical entity. The GSI2 index
@@ -437,19 +554,32 @@ export const getProblemBySlug: APIGatewayProxyHandlerV2 = async (event) => {
     return json(400, { error: "bad_request", message: "missing slug" });
   }
 
-  // v1 does a Scan with FilterExpression on `slug`. At MVP scale
-  // (<10 K problems) this is fast enough. v1.1 adds a `slug` GSI for
-  // direct GetItem-style lookup.
-  const result = await ddbDoc.send(
-    new ScanCommand({
+  // gsi3 slug lookup — Scan+Limit is wrong on DDB (Limit caps items
+  // *scanned*, not matches). Same pattern as submissions-bff.
+  const slugLookup = await ddbDoc.send(
+    new QueryCommand({
       TableName: TABLE_NAME,
-      FilterExpression: "slug = :slug",
-      ExpressionAttributeValues: { ":slug": slug },
+      IndexName: "gsi3",
+      KeyConditionExpression: "slugKey = :sk",
+      ExpressionAttributeValues: { ":sk": `SLUG#${slug}` },
       Limit: 1,
     }),
   );
+  const slugRow = slugLookup.Items?.[0] as
+    | { pk?: string; sk?: string }
+    | undefined;
+  if (!slugRow?.pk || !slugRow.sk) {
+    return json(404, { error: "not_found", message: "problem not found" });
+  }
 
-  const row = result.Items?.[0] as ProblemRow | undefined;
+  const got = await ddbDoc.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { pk: slugRow.pk, sk: slugRow.sk },
+      ConsistentRead: false,
+    }),
+  );
+  const row = got.Item as ProblemRow | undefined;
   if (!row) {
     return json(404, { error: "not_found", message: "problem not found" });
   }
